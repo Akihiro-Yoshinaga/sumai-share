@@ -74,19 +74,26 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
       ].join('\n');
 
       const imageParts = converted.map(c => ({ inline_data: { mime_type: c.mimeType, data: c.base64 } }));
+      const reqBody   = JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+        generationConfig: { temperature: 0 },
+      });
+      const reqOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody };
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-            generationConfig: { temperature: 0 },
-          }),
-        }
-      );
-      if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
+      // モデルを順番に試す（404なら次へ）
+      const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash'];
+      let res!: Response;
+      for (const model of MODELS) {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          reqOpts
+        );
+        if (res.ok || res.status !== 404) break;
+      }
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(errBody.error?.message ?? `HTTP ${res.status}`);
+      }
       const json = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
       const text = json.candidates[0].content.parts[0].text;
       const m    = text.match(/\{[\s\S]*\}/);
