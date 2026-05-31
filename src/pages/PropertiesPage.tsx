@@ -48,7 +48,7 @@ function PropertyCard({
   const totalMust = mustTags.length;
   const score = totalMust === 0 ? 0 : Math.round((matchCount / totalMust) * 100);
 
-  const updateRating = (userId: 'partner1' | 'partner2', field: 'stars' | 'compromise', val: string | number) => {
+  const updateRating = (userId: 'akihiro' | 'akari', field: 'stars' | 'compromise', val: string | number) => {
     setRatings(prev =>
       prev.map(r =>
         r.userId === userId ? { ...r, [field]: val } : r
@@ -122,8 +122,8 @@ function PropertyCard({
         {/* 2人の評価 */}
         <div className="mt-4 grid grid-cols-2 gap-3">
           {([
-            { key: 'partner1' as const, label: 'あなた' },
-            { key: 'partner2' as const, label: 'パートナー' },
+            { key: 'akihiro' as const, label: 'あきひろ' },
+            { key: 'akari' as const, label: 'あかり' },
           ]).map(({ key, label }) => {
             const r = ratings.find(x => x.userId === key);
             return (
@@ -148,8 +148,8 @@ function PropertyCard({
       {expanded && (
         <div className="px-5 pb-5 border-t border-slate-100 pt-4 grid grid-cols-2 gap-3">
           {([
-            { key: 'partner1' as const, label: 'あなたの妥協点' },
-            { key: 'partner2' as const, label: 'パートナーの妥協点' },
+            { key: 'akihiro' as const, label: 'あきひろの妥協点' },
+            { key: 'akari' as const, label: 'あかりの妥協点' },
           ]).map(({ key, label }) => {
             const r = ratings.find(x => x.userId === key);
             return (

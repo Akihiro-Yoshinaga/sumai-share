@@ -5,14 +5,14 @@ import type { RoutineDay, RoutineBlock, DayType } from '../types';
 
 const USER_COLORS: Record<string, string> = {
   both: '#334e68',
-  partner1: '#486581',
-  partner2: '#9fb3c8',
+  akihiro: '#486581',
+  akari: '#9fb3c8',
 };
 
 const USER_LABELS: Record<string, string> = {
   both: '2人',
-  partner1: 'あなた',
-  partner2: 'パートナー',
+  akihiro: 'あきひろ',
+  akari: 'あかり',
 };
 
 const PALETTE = [
@@ -118,7 +118,7 @@ function BlockDetailPanel({
           <div>
             <label className="block text-xs text-slate-500 mb-1">誰が</label>
             <div className="flex gap-2">
-              {(['both', 'partner1', 'partner2'] as const).map(u => (
+              {(['both', 'akihiro', 'akari'] as const).map(u => (
                 <button
                   key={u}
                   onClick={() => setLocal(v => ({ ...v, userId: u }))}

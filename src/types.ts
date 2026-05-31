@@ -7,8 +7,18 @@ export interface Tag {
   createdAt: string;
 }
 
+// スプレッドシート「表_1」の1行に対応
+export interface Condition {
+  id: string;
+  category: string;
+  item: string;
+  detail: string;
+  priority: 'MUST' | 'WANT' | '-' | '';
+  note: string;
+}
+
 export interface PropertyRating {
-  userId: 'partner1' | 'partner2';
+  userId: 'akihiro' | 'akari';
   stars: number;
   compromise: string;
 }
@@ -35,7 +45,7 @@ export interface RoutineBlock {
   endHour: number;
   label: string;
   color: string;
-  userId: 'partner1' | 'partner2' | 'both';
+  userId: 'akihiro' | 'akari' | 'both';
   note: string;
   requiredFeatures: string[];
 }
@@ -45,3 +55,6 @@ export interface RoutineDay {
   dayType: DayType;
   blocks: RoutineBlock[];
 }
+
+// GAS API のベースURL（デプロイ後に設定）
+export const GAS_API_URL = import.meta.env.VITE_GAS_URL ?? '';
