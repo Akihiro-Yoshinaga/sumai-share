@@ -58,5 +58,14 @@ export interface RoutineDay {
   blocks: RoutineBlock[];
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  dueDate: string;
+  assignee: 'akihiro' | 'akari' | 'both';
+  done: boolean;
+  category: string;
+}
+
 // GAS API のベースURL（デプロイ後に設定）
 export const GAS_API_URL = import.meta.env.VITE_GAS_URL ?? '';

@@ -1,14 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Check, Calendar, User } from 'lucide-react';
-
-interface Task {
-  id: string;
-  title: string;
-  dueDate: string;
-  assignee: 'akihiro' | 'akari' | 'both';
-  done: boolean;
-  category: string;
-}
+import { Plus, X, Check, Calendar, User, Loader } from 'lucide-react';
+import { apiGetTasks, apiSaveTasks } from '../api';
+import type { Task } from '../types';
 
 const CATEGORIES = ['内見', '手続き', '引越し準備', '家具・家電', 'その他'];
 const ASSIGNEES = [
@@ -17,32 +10,36 @@ const ASSIGNEES = [
   { key: 'akari'   as const, label: 'あかり', color: 'bg-slate-400 text-white' },
 ];
 
-const MOCK_TASKS: Task[] = [
-  { id: 'task1', title: 'SUUMO条件を最終確認', dueDate: '2026-06-01', assignee: 'both', done: false, category: '手続き' },
-  { id: 'task2', title: '三軒茶屋物件の内見予約', dueDate: '2026-06-03', assignee: 'akihiro', done: false, category: '内見' },
-  { id: 'task3', title: '中目黒物件の内見予約', dueDate: '2026-06-03', assignee: 'akari', done: false, category: '内見' },
-  { id: 'task4', title: '住民票の準備', dueDate: '2026-06-10', assignee: 'both', done: false, category: '手続き' },
-  { id: 'task5', title: '引越し業者の見積もり比較', dueDate: '2026-06-15', assignee: 'both', done: true, category: '引越し準備' },
-  { id: 'task6', title: 'ダイニングテーブル選び', dueDate: '2026-06-20', assignee: 'both', done: false, category: '家具・家電' },
-];
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [filterAssignee, setFilterAssignee] = useState<'all' | 'akihiro' | 'akari' | 'both'>('all');
   const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'done'>>({
     title: '', dueDate: '', assignee: 'both', category: 'その他',
   });
 
-  const toggle = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  useEffect(() => {
+    apiGetTasks()
+      .then(data => { setTasks(data ?? []); setLoading(false); })
+      .catch(() => { setTasks([]); setLoading(false); });
+  }, []);
+
+  const saveTasks = (next: Task[]) => {
+    setTasks(next);
+    apiSaveTasks(next).catch(console.error);
   };
 
-  const remove = (id: string) => setTasks(prev => prev.filter(t => t.id !== id));
+  const toggle = (id: string) => {
+    saveTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  };
+
+  const remove = (id: string) => saveTasks(tasks.filter(t => t.id !== id));
 
   const add = () => {
     if (!newTask.title.trim()) return;
-    setTasks(prev => [...prev, { ...newTask, id: `task${Date.now()}`, done: false }]);
+    saveTasks([...tasks, { ...newTask, id: `task${Date.now()}`, done: false }]);
     setNewTask({ title: '', dueDate: '', assignee: 'both', category: 'その他' });
     setShowAdd(false);
   };
@@ -61,8 +58,6 @@ export default function TasksPage() {
     const diff = (new Date(t.dueDate).getTime() - Date.now()) / 86400000;
     return diff >= 0 && diff <= 7;
   };
-
-  useEffect(() => {}, []);
 
   return (
     <div className="space-y-6">
@@ -88,6 +83,12 @@ export default function TasksPage() {
             style={{ width: tasks.length ? `${(done.length / tasks.length) * 100}%` : '0%' }} />
         </div>
       </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+          <Loader size={16} className="animate-spin" /> 読み込み中...
+        </div>
+      )}
 
       {/* 追加フォーム */}
       {showAdd && (

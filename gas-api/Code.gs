@@ -29,8 +29,9 @@ function handleRequest(e) {
     if (action === 'saveProperties')  { output.setContent(JSON.stringify(saveProperties(Array.isArray(body) ? body : (body.properties || [])))); return output; }
     if (action === 'getRoutines')     { output.setContent(JSON.stringify(getJsonSheet(SHEET_ROUTINES)));      return output; }
     if (action === 'saveRoutines')    { output.setContent(JSON.stringify(saveJsonSheet(SHEET_ROUTINES, Array.isArray(body) ? body : body.data))); return output; }
-    if (action === 'getTasks')        { output.setContent(JSON.stringify(getJsonSheet(SHEET_TASKS)));         return output; }
-    if (action === 'saveTasks')       { output.setContent(JSON.stringify(saveJsonSheet(SHEET_TASKS, Array.isArray(body) ? body : body.data)));    return output; }
+    if (action === 'getTasks')               { output.setContent(JSON.stringify(getJsonSheet(SHEET_TASKS)));                                    return output; }
+    if (action === 'saveTasks')              { output.setContent(JSON.stringify(saveJsonSheet(SHEET_TASKS, Array.isArray(body) ? body : body.data))); return output; }
+    if (action === 'analyzePropertyImages')  { output.setContent(JSON.stringify(analyzePropertyImages(body.images || [])));                        return output; }
 
     output.setContent(JSON.stringify({ error: 'unknown action: ' + action }));
     return output;
@@ -97,6 +98,44 @@ function saveJsonSheet(sheetName, data) {
     }
     sheet.getRange(2, 1).setValue(JSON.stringify(data));
     return { success: true };
+  } catch (err) { return { error: err.toString() }; }
+}
+
+// ===== Gemini画像解析 =====
+function analyzePropertyImages(images) {
+  try {
+    var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+    if (!apiKey) return { error: 'GEMINI_API_KEY not set in script properties' };
+
+    var prompt = [
+      'これらの画像は同じ物件のスクリーンショットです（SUUMO・アットホーム等）。',
+      '複数の画像から情報を統合して、以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
+      '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所" }',
+      'JSONのみ返してください。説明文は不要です。'
+    ].join('\n');
+
+    var parts = [{ text: prompt }];
+    for (var i = 0; i < images.length; i++) {
+      parts.push({ inline_data: { mime_type: images[i].mimeType, data: images[i].base64 } });
+    }
+
+    var res = UrlFetchApp.fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
+      {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0 } }),
+        muteHttpExceptions: true
+      }
+    );
+
+    var json = JSON.parse(res.getContentText());
+    if (json.error) return { error: json.error.message };
+
+    var text = json.candidates[0].content.parts[0].text;
+    var m = text.match(/\{[\s\S]*\}/);
+    if (!m) return { error: 'JSON not found in response' };
+    return { data: JSON.parse(m[0]) };
   } catch (err) { return { error: err.toString() }; }
 }
 

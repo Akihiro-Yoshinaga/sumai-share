@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Tag, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { apiGetRoutines, apiSaveRoutines } from '../api';
 import { fetchRoutineDays } from '../mockData';
 import type { RoutineDay, RoutineBlock, DayType } from '../types';
 
@@ -442,11 +443,18 @@ export default function RoutinePage() {
   const [activeDay, setActiveDay] = useState<DayType>('weekday');
 
   useEffect(() => {
-    fetchRoutineDays().then(data => { setDays(data); setLoading(false); });
+    apiGetRoutines()
+      .then(data => data ?? fetchRoutineDays())
+      .then(data => { setDays(data); setLoading(false); })
+      .catch(() => fetchRoutineDays().then(data => { setDays(data); setLoading(false); }));
   }, []);
 
   const updateDay = (updated: RoutineDay) => {
-    setDays(prev => prev.map(d => d.id === updated.id ? updated : d));
+    setDays(prev => {
+      const next = prev.map(d => d.id === updated.id ? updated : d);
+      apiSaveRoutines(next).catch(console.error);
+      return next;
+    });
   };
 
   const currentDay = days.find(d => d.dayType === activeDay);

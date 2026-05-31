@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { apiGetProperties, apiSaveProperties } from '../api';
+import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus } from 'lucide-react';
+import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages } from '../api';
 import type { Property, PropertyRating } from '../types';
-import { getGeminiApiKey } from './SettingsPage';
 
 const PARTNERS = [
   { key: 'akihiro' as const, label: 'あきひろ' },
@@ -60,41 +58,10 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
     if (!files.length) return;
     setLoading(true); setError('');
     try {
-      const apiKey = getGeminiApiKey();
-      if (!apiKey) throw new Error('no_key');
-
       const converted = await Promise.all(files.map(fileToBase64));
       setPreviews(converted.map(c => c.dataUrl));
 
-      const prompt = [
-        'これらの画像は同じ物件のスクリーンショットです（SUUMO・アットホーム等）。',
-        '複数の画像から情報を統合して、以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
-        '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所", "note": "特記事項" }',
-        'JSONのみ返してください。説明文は不要です。',
-      ].join('\n');
-
-      const imageParts = converted.map(c => ({ inline_data: { mime_type: c.mimeType, data: c.base64 } }));
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-            generationConfig: { temperature: 0 },
-          }),
-        }
-      );
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        throw new Error(errBody.error?.message ?? `HTTP ${res.status}`);
-      }
-      const json = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
-      const text = json.candidates[0].content.parts[0].text;
-      const m    = text.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error('JSON not found');
-      const data = JSON.parse(m[0]);
+      const data = await apiAnalyzePropertyImages(converted.map(c => ({ base64: c.base64, mimeType: c.mimeType })));
       setForm(f => ({
         ...f,
         name:    data.name    || '',
@@ -106,7 +73,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
       }));
       setStep('form');
     } catch (e) {
-      setError(e instanceof Error && e.message === 'no_key' ? 'no_key' : (e instanceof Error ? e.message : '解析に失敗しました'));
+      setError(e instanceof Error ? e.message : '解析に失敗しました');
       setStep('form');
     } finally { setLoading(false); }
   };
@@ -171,15 +138,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                 </>
               )}
             </div>
-            {error === 'no_key' ? (
-              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                <Settings size={13} className="shrink-0" />
-                <span>Gemini APIキーが未設定です。</span>
-                <Link to="/settings" className="underline font-semibold shrink-0">設定する →</Link>
-              </div>
-            ) : error ? (
-              <p className="text-xs text-red-500">{error}</p>
-            ) : null}
+            {error && <p className="text-xs text-red-500">{error}</p>}
             <button onPointerDown={() => setStep('form')}
               className="w-full text-xs text-slate-400 hover:text-slate-600 py-2 border border-dashed border-slate-200 rounded-xl transition-colors">
               手動で入力する
@@ -261,16 +220,16 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
   );
 }
 
-function PropertyCard({ property, mustCount, onDelete }: { property: Property; mustCount: number; onDelete: (id: string) => void }) {
+function PropertyCard({ property, mustCount, onDelete, onRatingChange }: { property: Property; mustCount: number; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [ratings, setRatings] = useState<PropertyRating[]>(property.ratings);
 
   const score = mustCount === 0 ? 0 : Math.round((property.mustTagIds.length / mustCount) * 100);
 
-  const avg = ratings.reduce((s, r) => s + r.stars, 0) / (ratings.filter(r => r.stars > 0).length || 1);
+  const avg = property.ratings.reduce((s, r) => s + r.stars, 0) / (property.ratings.filter(r => r.stars > 0).length || 1);
 
   const updateRating = (userId: 'akihiro' | 'akari', field: 'stars' | 'compromise', val: string | number) => {
-    setRatings(prev => prev.map(r => r.userId === userId ? { ...r, [field]: val } : r));
+    const next = property.ratings.map(r => r.userId === userId ? { ...r, [field]: val } : r);
+    onRatingChange(property.id, next);
   };
 
   return (
@@ -346,7 +305,7 @@ function PropertyCard({ property, mustCount, onDelete }: { property: Property; m
       {expanded && (
         <div className="px-4 pb-4 pt-3 border-t border-slate-50 space-y-4">
           {PARTNERS.map(({ key, label }) => {
-            const r = ratings.find(x => x.userId === key);
+            const r = property.ratings.find(x => x.userId === key);
             return (
               <div key={key}>
                 <p className="text-xs font-bold text-slate-600 mb-2">{label}</p>
@@ -440,6 +399,11 @@ export default function PropertiesPage() {
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
                 onDelete={id => setProperties(prev => {
                   const next = prev.filter(p => p.id !== id);
+                  apiSaveProperties(next).catch(console.error);
+                  return next;
+                })}
+                onRatingChange={(id, ratings) => setProperties(prev => {
+                  const next = prev.map(p => p.id === id ? { ...p, ratings } : p);
                   apiSaveProperties(next).catch(console.error);
                   return next;
                 })} />
