@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Eye, EyeOff } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader } from 'lucide-react';
 
 const STORAGE_KEY = 'gemini_api_key';
 
@@ -8,9 +8,28 @@ export function getGeminiApiKey(): string {
 }
 
 export default function SettingsPage() {
-  const [key, setKey]       = useState(getGeminiApiKey);
-  const [show, setShow]     = useState(false);
-  const [saved, setSaved]   = useState(false);
+  const [key, setKey]         = useState(getGeminiApiKey);
+  const [show, setShow]       = useState(false);
+  const [saved, setSaved]     = useState(false);
+  const [models, setModels]   = useState<string[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [checkErr, setCheckErr] = useState('');
+
+  const checkModels = async () => {
+    if (!key.trim()) return;
+    setChecking(true); setCheckErr(''); setModels([]);
+    try {
+      const res  = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`);
+      const json = await res.json() as { models?: { name: string; supportedGenerationMethods?: string[] }[]; error?: { message: string } };
+      if (json.error) throw new Error(json.error.message);
+      const vision = (json.models ?? [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => m.name);
+      setModels(vision);
+    } catch (e) {
+      setCheckErr(e instanceof Error ? e.message : 'エラー');
+    } finally { setChecking(false); }
+  };
 
   const save = () => {
     localStorage.setItem(STORAGE_KEY, key.trim());
@@ -69,6 +88,25 @@ export default function SettingsPage() {
           キーはブラウザの localStorage に保存されます。サーバーには送信されません。
           2人それぞれのデバイスで1回ずつ入力が必要です。
         </div>
+
+        <button
+          type="button"
+          onPointerDown={e => { e.preventDefault(); checkModels(); }}
+          disabled={!key.trim() || checking}
+          className="flex items-center gap-1.5 text-xs text-slate-500 border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 disabled:opacity-40 transition-colors"
+        >
+          {checking ? <Loader size={12} className="animate-spin" /> : null}
+          APIキーを確認・使えるモデルを表示
+        </button>
+        {checkErr && <p className="text-xs text-red-500">{checkErr}</p>}
+        {models.length > 0 && (
+          <div className="text-xs bg-slate-50 rounded-xl p-3 space-y-1">
+            <p className="font-semibold text-slate-600 mb-2">使用可能なモデル（画像対応のものを選択）:</p>
+            {models.filter(m => m.includes('flash') || m.includes('vision') || m.includes('pro')).map(m => (
+              <p key={m} className="font-mono text-slate-500">{m}</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
