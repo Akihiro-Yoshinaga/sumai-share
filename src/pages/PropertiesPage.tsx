@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus } from 'lucide-react';
 import { fetchProperties } from '../mockData';
 import type { Property, PropertyRating } from '../types';
 
@@ -32,43 +32,55 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
-// URL入力モーダル（スクレイピング呼び出し）
+type FormData = Omit<Property, 'id' | 'ratings' | 'mustTagIds'>;
+
 function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: Property) => void }) {
-  const [url, setUrl] = useState('');
+  const [step, setStep]       = useState<'top' | 'form'>('top');
   const [loading, setLoading] = useState(false);
-  const [manual, setManual] = useState(false);
-  const [form, setForm] = useState<Omit<Property, 'id' | 'ratings' | 'mustTagIds'>>({
+  const [previewSrc, setPreviewSrc] = useState('');
+  const [form, setForm]       = useState<FormData>({
     name: '', rent: 0, layout: '', sqm: 0, url: '', address: '', metAt: new Date().toISOString().slice(0, 10),
   });
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
+  const fileInputRef          = useRef<HTMLInputElement>(null);
 
-  const fetchFromUrl = async () => {
-    if (!url.trim()) return;
+  const analyzeImage = async (file: File) => {
     setLoading(true); setError('');
-    try {
-      const gasUrl = import.meta.env.VITE_GAS_URL;
-      if (gasUrl) {
-        const res = await fetch(`${gasUrl}?action=scrapeProperty&url=${encodeURIComponent(url)}`, { redirect: 'follow' });
-        const json = await res.json() as { data?: typeof form; error?: string };
-        if (json.error) throw new Error(json.error);
-        if (json.data) { setForm({ ...json.data, url }); setManual(true); return; }
-      }
-      // URLのドメインからサイト名を推測してプレースホルダーとして使う
-      let guessedName = '';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl   = reader.result as string;
+      const base64    = dataUrl.split(',')[1];
+      const mimeType  = file.type || 'image/jpeg';
+      setPreviewSrc(dataUrl);
       try {
-        const host = new URL(url).hostname;
-        if (host.includes('suumo')) guessedName = 'SUUMO物件';
-        else if (host.includes('athome')) guessedName = 'アットホーム物件';
-        else if (host.includes('homes') || host.includes('lifull')) guessedName = 'LIFULL HOME\'S物件';
-        else if (host.includes('chintai')) guessedName = 'CHINTAI物件';
-      } catch { /* invalid URL */ }
-      setForm(f => ({ ...f, name: guessedName, url, metAt: new Date().toISOString().slice(0, 10) }));
-      setManual(true);
-    } catch (e) {
-      setError('読み取りに失敗しました。手動で入力してください。');
-      setForm(f => ({ ...f, url }));
-      setManual(true);
-    } finally { setLoading(false); }
+        const gasUrl = import.meta.env.VITE_GAS_URL;
+        if (!gasUrl) throw new Error('GAS_URL未設定');
+        const res  = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'scrapeProperty', imageBase64: base64, mimeType }),
+        });
+        const json = await res.json() as { data?: FormData; error?: string };
+        if (json.error) throw new Error(json.error);
+        if (json.data)  setForm(f => ({ ...f, ...json.data }));
+        setStep('form');
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '解析に失敗しました');
+        setStep('form');
+      } finally { setLoading(false); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) analyzeImage(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) analyzeImage(file);
   };
 
   const submit = () => {
@@ -82,51 +94,77 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onPointerDown={e => { if (e.currentTarget === e.target) onClose(); }}>
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4" onPointerDown={e => e.stopPropagation()}>
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" onPointerDown={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-navy-900">物件を追加</h3>
           <button onPointerDown={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"><X size={18} /></button>
         </div>
 
-        {/* URL入力 */}
-        {!manual && (
+        {/* トップ: スクショ or 手動 */}
+        {step === 'top' && (
           <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">SUUMO / アットホームのURL</label>
-              <div className="flex gap-2">
-                <input type="url" value={url} onChange={e => setUrl(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && fetchFromUrl()}
-                  className="flex-1 text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400"
-                  placeholder="https://suumo.jp/chintai/..." />
-                <button onPointerDown={e => { e.preventDefault(); fetchFromUrl(); }} disabled={loading || !url.trim()}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-navy-900 text-white text-xs font-semibold rounded-xl disabled:opacity-50 hover:bg-navy-800 transition-colors">
-                  {loading ? <Loader size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                  {loading ? '取得中' : '自動入力'}
-                </button>
-              </div>
+            {/* スクショアップロードゾーン */}
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+            <div
+              onPointerDown={() => fileInputRef.current?.click()}
+              onDragOver={e => e.preventDefault()}
+              onDrop={onDrop}
+              className="flex flex-col items-center justify-center gap-3 py-8 border-2 border-dashed border-navy-200 rounded-2xl bg-navy-50 cursor-pointer hover:bg-navy-100 active:bg-navy-100 transition-colors"
+            >
+              {loading ? (
+                <>
+                  <Loader size={28} className="text-navy-400 animate-spin" />
+                  <p className="text-sm font-semibold text-navy-700">Geminiが解析中...</p>
+                  <p className="text-xs text-navy-400">物件情報を読み取っています</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-2xl bg-navy-100 flex items-center justify-center">
+                    <ImagePlus size={24} className="text-navy-500" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-navy-800">スクショをアップロード</p>
+                    <p className="text-xs text-navy-400 mt-0.5">タップして選択、またはドラッグ＆ドロップ</p>
+                  </div>
+                  <span className="flex items-center gap-1 text-xs text-navy-600 bg-navy-200 px-3 py-1 rounded-full font-medium">
+                    <Sparkles size={11} /> Geminiが自動で読み取ります
+                  </span>
+                </>
+              )}
             </div>
             {error && <p className="text-xs text-red-500">{error}</p>}
-            <button onPointerDown={() => setManual(true)}
+            <button onPointerDown={() => setStep('form')}
               className="w-full text-xs text-slate-400 hover:text-slate-600 py-2 border border-dashed border-slate-200 rounded-xl transition-colors">
               手動で入力する
             </button>
           </div>
         )}
 
-        {/* 手動入力フォーム */}
-        {manual && (
+        {/* フォーム（スクショ解析後 or 手動） */}
+        {step === 'form' && (
           <div className="space-y-3">
+            {/* 解析したスクショのサムネイル */}
+            {previewSrc && (
+              <div className="relative rounded-xl overflow-hidden border border-slate-100">
+                <img src={previewSrc} alt="スクショ" className="w-full h-28 object-cover object-top" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                <span className="absolute bottom-2 left-2 text-[10px] text-white bg-black/40 px-2 py-0.5 rounded-full">
+                  Geminiで解析済み
+                </span>
+              </div>
+            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
             <div>
               <label className="block text-xs text-slate-500 mb-1">物件名 *</label>
               <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 autoFocus
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="例: ○○マンション" />
+                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="例: ガーデニエール砧WEST" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">家賃（円）</label>
                 <input type="number" value={form.rent || ''} onChange={e => setForm(f => ({ ...f, rent: Number(e.target.value) }))}
-                  className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="200000" />
+                  className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="260000" />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">間取り</label>
@@ -147,17 +185,23 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
             <div>
               <label className="block text-xs text-slate-500 mb-1">住所</label>
               <input type="text" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="渋谷区○○1丁目" />
+                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="世田谷区砧" />
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">物件URL</label>
               <input type="url" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
                 className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="https://..." />
             </div>
-            <button onPointerDown={e => { e.preventDefault(); submit(); }}
-              className="w-full bg-navy-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-navy-800 transition-colors">
-              追加する
-            </button>
+            <div className="flex gap-2">
+              <button onPointerDown={() => setStep('top')}
+                className="px-4 py-3 text-sm text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                戻る
+              </button>
+              <button onPointerDown={e => { e.preventDefault(); submit(); }}
+                className="flex-1 bg-navy-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-navy-800 transition-colors">
+                追加する
+              </button>
+            </div>
           </div>
         )}
       </div>
