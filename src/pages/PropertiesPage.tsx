@@ -56,6 +56,8 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
       reader.readAsDataURL(file);
     });
 
+  const [inputUrl, setInputUrl] = useState('');
+
   const analyzeImages = async (files: File[]) => {
     if (!files.length) return;
     setLoading(true); setError('');
@@ -102,6 +104,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         layout:  data.layout  || '',
         sqm:     Number(data.sqm)   || 0,
         address: data.address || '',
+        url:     inputUrl.trim() || f.url,
       }));
       setStep('form');
     } catch (e) {
@@ -170,6 +173,18 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                 </>
               )}
             </div>
+            {/* URL入力（任意） */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">物件URL（任意）</label>
+              <input
+                type="url"
+                value={inputUrl}
+                onChange={e => setInputUrl(e.target.value)}
+                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400"
+                placeholder="https://www.athome.co.jp/..."
+              />
+            </div>
+
             {error === 'no_key' ? (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
                 <Settings size={13} className="shrink-0" />
@@ -179,7 +194,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
             ) : error ? (
               <p className="text-xs text-red-500">{error}</p>
             ) : null}
-            <button onPointerDown={() => setStep('form')}
+            <button onPointerDown={() => { setForm(f => ({ ...f, url: inputUrl.trim() })); setStep('form'); }}
               className="w-full text-xs text-slate-400 hover:text-slate-600 py-2 border border-dashed border-slate-200 rounded-xl transition-colors">
               手動で入力する
             </button>
