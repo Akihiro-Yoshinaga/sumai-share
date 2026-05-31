@@ -42,7 +42,9 @@ export type DayType = 'weekday' | 'weekend';
 export interface RoutineBlock {
   id: string;
   startHour: number;
+  startMin: number;  // 0 | 10 | 20 | 30 | 40 | 50
   endHour: number;
+  endMin: number;    // 0 | 10 | 20 | 30 | 40 | 50
   label: string;
   color: string;
   userId: 'akihiro' | 'akari' | 'both';

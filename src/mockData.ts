@@ -101,25 +101,25 @@ export const mockRoutineDays: RoutineDay[] = [
     dayType: 'weekday',
     blocks: [
       {
-        id: 'b1', startHour: 6, endHour: 7,
+        id: 'b1', startHour: 6, startMin: 0, endHour: 7, endMin: 0,
         label: '起床・朝の準備', color: '#f0f4f8', userId: 'both',
         note: '洗面台の取り合いが発生しがち。独立洗面台が必要。',
         requiredFeatures: ['独立洗面台', '洗面スペース2人分'],
       },
       {
-        id: 'b2', startHour: 7, endHour: 8,
+        id: 'b2', startHour: 7, startMin: 0, endHour: 8, endMin: 0,
         label: '朝食・出発', color: '#f0f4f8', userId: 'both',
         note: 'キッチンで朝食を一緒に作りたい。アイランドキッチン理想。',
         requiredFeatures: ['対面キッチン', 'ダイニングスペース'],
       },
       {
-        id: 'b3', startHour: 19, endHour: 21,
+        id: 'b3', startHour: 19, startMin: 0, endHour: 21, endMin: 0,
         label: '帰宅・夕食', color: '#d9e2ec', userId: 'both',
         note: '帰宅時間がバラバラなので、玄関→リビングの動線をシンプルに。',
         requiredFeatures: ['広めの玄関', 'リビング直結の動線'],
       },
       {
-        id: 'b4', startHour: 21, endHour: 23,
+        id: 'b4', startHour: 21, startMin: 0, endHour: 23, endMin: 0,
         label: 'リラックスタイム', color: '#d9e2ec', userId: 'both',
         note: '一緒にいるけど各自の時間も欲しい。ソファとデスクを別置きしたい。',
         requiredFeatures: ['リビングに6畳以上', 'ワークスペース確保'],
@@ -131,25 +131,25 @@ export const mockRoutineDays: RoutineDay[] = [
     dayType: 'weekend',
     blocks: [
       {
-        id: 'b5', startHour: 8, endHour: 10,
+        id: 'b5', startHour: 8, startMin: 0, endHour: 10, endMin: 0,
         label: 'ゆっくり起床・ブランチ', color: '#f0f4f8', userId: 'both',
         note: '休日は窓から光が入る明るいリビングで過ごしたい。南向き希望。',
         requiredFeatures: ['南向きリビング', '広いダイニングテーブル置ける'],
       },
       {
-        id: 'b6', startHour: 10, endHour: 13,
+        id: 'b6', startHour: 10, startMin: 0, endHour: 13, endMin: 0,
         label: '外出 / 買い物', color: '#bcccdc', userId: 'both',
         note: '自転車で近くのスーパーに行きたい。駐輪場必須。',
         requiredFeatures: ['駐輪場'],
       },
       {
-        id: 'b7', startHour: 14, endHour: 17,
+        id: 'b7', startHour: 14, startMin: 0, endHour: 17, endMin: 0,
         label: 'あきひろの趣味時間', color: '#d9e2ec', userId: 'akihiro',
         note: '読書・テレワーク。静かな個室orワークコーナーが欲しい。',
         requiredFeatures: ['個室or書斎コーナー'],
       },
       {
-        id: 'b8', startHour: 19, endHour: 21,
+        id: 'b8', startHour: 19, startMin: 0, endHour: 21, endMin: 0,
         label: '自炊・夕食', color: '#d9e2ec', userId: 'both',
         note: '2人で料理するので広めのキッチンが嬉しい。食洗機あれば◎',
         requiredFeatures: ['広めキッチン', '食洗機対応'],
