@@ -336,13 +336,31 @@ export default function PropertiesPage() {
   const [sortKey, setSortKey]       = useState<SortKey>('newest');
   const MUST_COUNT = 7;
 
+  const LS_KEY = 'sumai_properties';
+
+  const saveProperties = (next: Property[]) => {
+    setProperties(next);
+    localStorage.setItem(LS_KEY, JSON.stringify(next));
+    apiSaveProperties(next).catch(console.error);
+  };
+
   useEffect(() => {
-    apiGetProperties().then(data => { setProperties(data); setLoading(false); }).catch(() => setLoading(false));
+    const local = localStorage.getItem(LS_KEY);
+    const localData: Property[] = local ? JSON.parse(local) : [];
+    if (localData.length > 0) { setProperties(localData); setLoading(false); }
+    apiGetProperties()
+      .then(data => {
+        if (data.length > 0) {
+          setProperties(data);
+          localStorage.setItem(LS_KEY, JSON.stringify(data));
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const sorted = [...properties].sort((a, b) => {
     if (sortKey === 'must')   return b.mustTagIds.length - a.mustTagIds.length;
-    // newest: idがb${Date.now()}形式なので数値が大きい方が新しい
     return b.id.localeCompare(a.id);
   });
 
@@ -352,11 +370,7 @@ export default function PropertiesPage() {
         <AddPropertyModal
           onClose={() => setShowAdd(false)}
           onAdd={p => {
-            setProperties(prev => {
-              const next = [p, ...prev];
-              apiSaveProperties(next).catch(console.error);
-              return next;
-            });
+            saveProperties([p, ...properties]);
             setShowAdd(false);
           }}
         />
@@ -397,16 +411,8 @@ export default function PropertiesPage() {
           <div className="space-y-4">
             {sorted.map(p => (
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
-                onDelete={id => setProperties(prev => {
-                  const next = prev.filter(p => p.id !== id);
-                  apiSaveProperties(next).catch(console.error);
-                  return next;
-                })}
-                onRatingChange={(id, ratings) => setProperties(prev => {
-                  const next = prev.map(p => p.id === id ? { ...p, ratings } : p);
-                  apiSaveProperties(next).catch(console.error);
-                  return next;
-                })} />
+                onDelete={id => saveProperties(properties.filter(p => p.id !== id))}
+                onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))} />
             ))}
           </div>
           <button onPointerDown={() => setShowAdd(true)}
