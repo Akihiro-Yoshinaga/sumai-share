@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, X, AlertCircle, Star, RefreshCw, Save, Loader } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, X, AlertCircle, Star, RefreshCw, Save, Loader, ImagePlus, Trash2 } from 'lucide-react';
 import { GAS_API_URL } from '../types';
 import type { Condition } from '../types';
 import { apiGetConditions, apiSaveConditions } from '../api';
@@ -256,6 +256,97 @@ export default function ValuesPage() {
           className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-slate-200 rounded-2xl text-sm text-slate-400 hover:border-navy-300 hover:text-navy-600 transition-colors">
           <Plus size={15} /> 条件を追加
         </button>
+      )}
+
+      {/* 画像ギャラリー */}
+      <ImageGallery />
+    </div>
+  );
+}
+
+interface ImageItem {
+  id: string;
+  dataUrl: string;
+  label: string;
+  category: '家具' | '間取り' | '内装' | 'その他';
+}
+
+const IMG_CATEGORIES: ImageItem['category'][] = ['家具', '間取り', '内装', 'その他'];
+
+function ImageGallery() {
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        setImages(prev => [...prev, {
+          id: `img_${Date.now()}_${Math.random()}`,
+          dataUrl: e.target?.result as string,
+          label: file.name.replace(/\.[^.]+$/, ''),
+          category: 'その他',
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const update = (id: string, field: 'label' | 'category', val: string) => {
+    setImages(prev => prev.map(img => img.id === id ? { ...img, [field]: val } : img));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-bold text-navy-900">理想の画像・間取り</h2>
+        <span className="text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">{images.length}枚</span>
+      </div>
+
+      {/* ドロップゾーン */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+        onPointerDown={() => fileRef.current?.click()}
+        className={`flex flex-col items-center justify-center gap-2 py-8 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
+          dragOver ? 'border-navy-400 bg-navy-50' : 'border-slate-200 hover:border-navy-300 hover:bg-slate-50'
+        }`}
+      >
+        <ImagePlus size={24} className="text-slate-300" />
+        <p className="text-sm text-slate-400">タップまたはドラッグで画像を追加</p>
+        <p className="text-xs text-slate-300">家具・間取り・内装の写真など</p>
+        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
+          onChange={e => addFiles(e.target.files)} />
+      </div>
+
+      {/* 画像グリッド */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          {images.map(img => (
+            <div key={img.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="relative">
+                <img src={img.dataUrl} alt={img.label} className="w-full h-36 object-cover" />
+                <button onPointerDown={() => setImages(prev => prev.filter(i => i.id !== img.id))}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 hover:bg-red-500 flex items-center justify-center transition-colors">
+                  <Trash2 size={13} className="text-white" />
+                </button>
+              </div>
+              <div className="p-3 space-y-2">
+                <input type="text" value={img.label} onChange={e => update(img.id, 'label', e.target.value)}
+                  className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-navy-400"
+                  placeholder="ラベル（任意）" />
+                <select value={img.category} onChange={e => update(img.id, 'category', e.target.value as ImageItem['category'])}
+                  className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-navy-400 bg-white">
+                  {IMG_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

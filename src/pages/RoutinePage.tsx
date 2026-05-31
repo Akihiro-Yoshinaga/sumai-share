@@ -1,231 +1,199 @@
-import { useState, useEffect } from 'react';
-import { Plus, ChevronUp, Tag } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, X, Tag, Pencil, Trash2 } from 'lucide-react';
 import { fetchRoutineDays } from '../mockData';
 import type { RoutineDay, RoutineBlock, DayType } from '../types';
 
-const USER_COLORS: Record<string, string> = {
-  both: '#334e68',
-  akihiro: '#486581',
-  akari: '#9fb3c8',
-};
+const USER_CONFIG = {
+  akihiro: { label: 'あきひろ', color: '#334e68', text: '#fff' },
+  akari:   { label: 'あかり',   color: '#9fb3c8', text: '#243b53' },
+  both:    { label: '2人',      color: '#243b53', text: '#fff' },
+} as const;
 
-const USER_LABELS: Record<string, string> = {
-  both: '2人',
-  akihiro: 'あきひろ',
-  akari: 'あかり',
-};
-
-const PALETTE = [
-  '#f0f4f8', '#d9e2ec', '#bcccdc', '#9fb3c8',
-  '#829ab1', '#627d98', '#486581', '#334e68',
-];
+type UserId = keyof typeof USER_CONFIG;
 
 const HOUR_START = 5;
-const HOUR_END = 24;
+const HOUR_END   = 24;
 const TOTAL_HOURS = HOUR_END - HOUR_START;
+const PX_PER_HOUR = 56;
 
 function TimelineBlock({
   block,
-  onClick,
+  onEdit,
+  onDelete,
 }: {
   block: RoutineBlock;
-  onClick: (b: RoutineBlock) => void;
+  onEdit: (b: RoutineBlock) => void;
+  onDelete: (id: string) => void;
 }) {
-  const top = ((block.startHour - HOUR_START) / TOTAL_HOURS) * 100;
-  const height = ((block.endHour - block.startHour) / TOTAL_HOURS) * 100;
-
-  const isDark = ['#334e68', '#486581', '#627d98'].includes(block.color);
+  const top    = (block.startHour - HOUR_START) * PX_PER_HOUR;
+  const height = (block.endHour - block.startHour) * PX_PER_HOUR;
+  const cfg    = USER_CONFIG[block.userId as UserId] ?? USER_CONFIG.both;
 
   return (
-    <button
-      onClick={() => onClick(block)}
-      className="absolute left-1 right-1 rounded-lg px-2 py-1 text-left overflow-hidden hover:opacity-90 transition-opacity border border-white/20 shadow-sm"
+    <div
+      className="absolute left-1 right-1 rounded-xl px-2.5 py-1.5 overflow-hidden group"
       style={{
-        top: `${top}%`,
-        height: `${height}%`,
-        backgroundColor: block.color,
-        color: isDark ? '#fff' : '#243b53',
-        minHeight: '28px',
+        top: `${top}px`,
+        height: `${height}px`,
+        backgroundColor: cfg.color,
+        color: cfg.text,
+        minHeight: '32px',
       }}
-      title={block.label}
     >
-      <p className="text-xs font-semibold leading-tight truncate">{block.label}</p>
-      <p className="text-xs opacity-70 leading-tight">{block.startHour}:00–{block.endHour}:00</p>
-    </button>
-  );
-}
-
-function BlockDetailPanel({
-  block,
-  onClose,
-  onUpdate,
-}: {
-  block: RoutineBlock;
-  onClose: () => void;
-  onUpdate: (b: RoutineBlock) => void;
-}) {
-  const [local, setLocal] = useState<RoutineBlock>(block);
-
-  const save = () => {
-    onUpdate(local);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-navy-900 text-base">ブロック編集</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xs">閉じる</button>
-        </div>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">ラベル</label>
-            <input
-              type="text"
-              value={local.label}
-              onChange={e => setLocal(v => ({ ...v, label: e.target.value }))}
-              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-navy-400 focus:ring-2 focus:ring-navy-100"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">開始時間</label>
-              <input
-                type="number"
-                min={HOUR_START}
-                max={HOUR_END - 1}
-                value={local.startHour}
-                onChange={e => setLocal(v => ({ ...v, startHour: Number(e.target.value) }))}
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-navy-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">終了時間</label>
-              <input
-                type="number"
-                min={HOUR_START + 1}
-                max={HOUR_END}
-                value={local.endHour}
-                onChange={e => setLocal(v => ({ ...v, endHour: Number(e.target.value) }))}
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-navy-400"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">誰が</label>
-            <div className="flex gap-2">
-              {(['both', 'akihiro', 'akari'] as const).map(u => (
-                <button
-                  key={u}
-                  onClick={() => setLocal(v => ({ ...v, userId: u }))}
-                  className={`flex-1 py-1.5 text-xs rounded-lg border transition-all ${
-                    local.userId === u
-                      ? 'bg-navy-900 text-white border-navy-900'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-                  }`}
-                >
-                  {USER_LABELS[u]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">色</label>
-            <div className="flex gap-1.5 flex-wrap">
-              {PALETTE.map(c => (
-                <button
-                  key={c}
-                  onClick={() => setLocal(v => ({ ...v, color: c }))}
-                  className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                    local.color === c ? 'border-navy-900 scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">メモ</label>
-            <textarea
-              value={local.note}
-              onChange={e => setLocal(v => ({ ...v, note: e.target.value }))}
-              rows={2}
-              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-navy-400 resize-none"
-              placeholder="動線や気になること..."
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">必要な設備・間取り条件</label>
-            <FeatureEditor
-              features={local.requiredFeatures}
-              onChange={f => setLocal(v => ({ ...v, requiredFeatures: f }))}
-            />
-          </div>
-        </div>
-
+      <p className="text-xs font-bold leading-tight truncate">{block.label}</p>
+      <p className="text-xs opacity-60 leading-tight">{block.startHour}:00–{block.endHour}:00</p>
+      {height >= 56 && block.note && (
+        <p className="text-xs opacity-50 leading-tight mt-0.5 line-clamp-2">{block.note}</p>
+      )}
+      {/* 編集・削除ボタン */}
+      <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
         <button
-          onClick={save}
-          className="w-full bg-navy-900 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-navy-800 transition"
+          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onEdit(block); }}
+          className="w-6 h-6 rounded-md bg-black/20 hover:bg-black/40 flex items-center justify-center transition-colors"
         >
-          保存
+          <Pencil size={11} />
+        </button>
+        <button
+          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onDelete(block.id); }}
+          className="w-6 h-6 rounded-md bg-black/20 hover:bg-red-500 flex items-center justify-center transition-colors"
+        >
+          <Trash2 size={11} />
         </button>
       </div>
     </div>
   );
 }
 
-function FeatureEditor({
-  features,
-  onChange,
+function BlockModal({
+  block,
+  onClose,
+  onSave,
 }: {
-  features: string[];
-  onChange: (f: string[]) => void;
+  block: Partial<RoutineBlock>;
+  onClose: () => void;
+  onSave: (b: RoutineBlock) => void;
 }) {
-  const [input, setInput] = useState('');
-  const add = () => {
-    const v = input.trim();
-    if (v && !features.includes(v)) {
-      onChange([...features, v]);
+  const [local, setLocal] = useState<Partial<RoutineBlock>>({ ...block });
+  const [featInput, setFeatInput] = useState('');
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const addFeat = () => {
+    const v = featInput.trim();
+    if (v) {
+      setLocal(prev => ({ ...prev, requiredFeatures: [...(prev.requiredFeatures ?? []), v] }));
+      setFeatInput('');
     }
-    setInput('');
   };
-  const remove = (f: string) => onChange(features.filter(x => x !== f));
+
+  const save = () => {
+    if (!local.label?.trim()) return;
+    onSave({
+      id: local.id ?? `b${Date.now()}`,
+      label: local.label,
+      startHour: local.startHour ?? 7,
+      endHour: local.endHour ?? 8,
+      userId: (local.userId ?? 'both') as UserId,
+      color: USER_CONFIG[(local.userId ?? 'both') as UserId]?.color ?? '#243b53',
+      note: local.note ?? '',
+      requiredFeatures: local.requiredFeatures ?? [],
+    });
+  };
+
   return (
-    <div className="space-y-2">
-      <div className="flex gap-1.5">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && add()}
-          placeholder="例: 独立洗面台"
-          className="flex-1 text-xs px-3 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-navy-400"
-        />
-        <button
-          onClick={add}
-          className="text-xs px-3 py-1.5 bg-navy-900 text-white rounded-lg hover:bg-navy-800"
-        >
-          追加
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onPointerDown={e => { if (e.target === overlayRef.current) onClose(); }}
+    >
+      <div
+        className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4"
+        onPointerDown={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-navy-900">{local.id ? 'ブロックを編集' : 'ブロックを追加'}</h3>
+          <button onPointerDown={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">ラベル *</label>
+          <input type="text" value={local.label ?? ''} autoFocus
+            onChange={e => setLocal(v => ({ ...v, label: e.target.value }))}
+            className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400 focus:ring-2 focus:ring-navy-100"
+            placeholder="例: 朝の準備" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">開始時間</label>
+            <input type="number" min={HOUR_START} max={HOUR_END - 1}
+              value={local.startHour ?? 7}
+              onChange={e => setLocal(v => ({ ...v, startHour: Number(e.target.value) }))}
+              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">終了時間</label>
+            <input type="number" min={HOUR_START + 1} max={HOUR_END}
+              value={local.endHour ?? 8}
+              onChange={e => setLocal(v => ({ ...v, endHour: Number(e.target.value) }))}
+              className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-2">担当者</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.entries(USER_CONFIG) as [UserId, typeof USER_CONFIG[UserId]][]).map(([key, cfg]) => (
+              <button key={key}
+                onPointerDown={e => { e.preventDefault(); setLocal(v => ({ ...v, userId: key })); }}
+                className="py-2 rounded-xl text-sm font-semibold border-2 transition-all"
+                style={local.userId === key
+                  ? { backgroundColor: cfg.color, color: cfg.text, borderColor: cfg.color }
+                  : { backgroundColor: 'white', color: '#64748b', borderColor: '#e2e8f0' }
+                }>
+                {cfg.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">メモ</label>
+          <textarea rows={2} value={local.note ?? ''}
+            onChange={e => setLocal(v => ({ ...v, note: e.target.value }))}
+            className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400 resize-none"
+            placeholder="動線や気になること..." />
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">必要な設備・条件</label>
+          <div className="flex gap-1.5">
+            <input type="text" value={featInput}
+              onChange={e => setFeatInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addFeat()}
+              className="flex-1 text-xs px-3 py-1.5 border border-slate-200 rounded-xl outline-none focus:border-navy-400"
+              placeholder="例: 独立洗面台" />
+            <button onPointerDown={e => { e.preventDefault(); addFeat(); }}
+              className="text-xs px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+              追加
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {(local.requiredFeatures ?? []).map(f => (
+              <span key={f} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-navy-50 text-navy-700 rounded-full border border-navy-100">
+                <Tag size={9} />{f}
+                <button onPointerDown={e => { e.preventDefault(); setLocal(v => ({ ...v, requiredFeatures: (v.requiredFeatures ?? []).filter(x => x !== f) })); }}
+                  className="ml-0.5 text-navy-400 hover:text-red-500">×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <button onPointerDown={e => { e.preventDefault(); save(); }}
+          className="w-full bg-navy-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-navy-800 transition-colors">
+          保存する
         </button>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {features.map(f => (
-          <span
-            key={f}
-            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200"
-          >
-            <Tag size={9} />
-            {f}
-            <button onClick={() => remove(f)} className="text-slate-400 hover:text-slate-600 ml-0.5">×</button>
-          </span>
-        ))}
       </div>
     </div>
   );
@@ -238,135 +206,90 @@ function DayTimeline({
   day: RoutineDay;
   onUpdate: (d: RoutineDay) => void;
 }) {
-  const [selected, setSelected] = useState<RoutineBlock | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newBlock, setNewBlock] = useState<Partial<RoutineBlock>>({ startHour: 7, endHour: 8, userId: 'both', color: '#d9e2ec' });
+  const [editingBlock, setEditingBlock] = useState<Partial<RoutineBlock> | null>(null);
+  const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => HOUR_START + i);
 
-  const updateBlock = (updated: RoutineBlock) => {
-    onUpdate({ ...day, blocks: day.blocks.map(b => (b.id === updated.id ? updated : b)) });
+  const saveBlock = (saved: RoutineBlock) => {
+    const exists = day.blocks.some(b => b.id === saved.id);
+    const updated = exists
+      ? day.blocks.map(b => b.id === saved.id ? saved : b)
+      : [...day.blocks, saved];
+    onUpdate({ ...day, blocks: updated });
+    setEditingBlock(null);
   };
 
-  const addBlock = () => {
-    if (!newBlock.label?.trim()) return;
-    const block: RoutineBlock = {
-      id: `b${Date.now()}`,
-      startHour: newBlock.startHour ?? 7,
-      endHour: newBlock.endHour ?? 8,
-      label: newBlock.label,
-      color: newBlock.color ?? '#d9e2ec',
-      userId: newBlock.userId ?? 'both',
-      note: '',
-      requiredFeatures: [],
-    };
-    onUpdate({ ...day, blocks: [...day.blocks, block] });
-    setNewBlock({ startHour: 7, endHour: 8, userId: 'both', color: '#d9e2ec' });
-    setShowAdd(false);
+  const deleteBlock = (id: string) => {
+    onUpdate({ ...day, blocks: day.blocks.filter(b => b.id !== id) });
   };
 
-  const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
+  const allFeatures = [...new Set(day.blocks.flatMap(b => b.requiredFeatures))];
 
   return (
     <div>
-      {selected && (
-        <BlockDetailPanel
-          block={selected}
-          onClose={() => setSelected(null)}
-          onUpdate={b => { updateBlock(b); setSelected(null); }}
+      {editingBlock && (
+        <BlockModal
+          block={editingBlock}
+          onClose={() => setEditingBlock(null)}
+          onSave={saveBlock}
         />
       )}
 
-      <div className="flex gap-0">
-        {/* 時刻軸 */}
-        <div className="relative w-10 shrink-0" style={{ height: `${TOTAL_HOURS * 48}px` }}>
+      {/* 凡例 */}
+      <div className="flex gap-3 mb-4">
+        {(Object.entries(USER_CONFIG) as [UserId, typeof USER_CONFIG[UserId]][]).map(([key, cfg]) => (
+          <span key={key} className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: cfg.color }} />
+            {cfg.label}
+          </span>
+        ))}
+      </div>
+
+      {/* タイムライン */}
+      <div className="flex gap-0 relative" style={{ height: `${TOTAL_HOURS * PX_PER_HOUR}px` }}>
+        {/* 時刻ラベル */}
+        <div className="relative w-10 shrink-0">
           {hours.map(h => (
-            <div
-              key={h}
-              className="absolute right-2 text-xs text-slate-300 -translate-y-2"
-              style={{ top: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
-            >
+            <div key={h}
+              className="absolute right-2 text-xs text-slate-300 -translate-y-2.5"
+              style={{ top: `${(h - HOUR_START) * PX_PER_HOUR}px` }}>
               {h}
             </div>
           ))}
         </div>
 
-        {/* タイムライングリッド */}
-        <div className="relative flex-1 border-l border-slate-100" style={{ height: `${TOTAL_HOURS * 48}px` }}>
+        {/* グリッド + ブロック */}
+        <div className="relative flex-1 border-l border-slate-100">
           {hours.map(h => (
-            <div
-              key={h}
+            <div key={h}
               className="absolute w-full border-t border-slate-100"
-              style={{ top: `${((h - HOUR_START) / TOTAL_HOURS) * 100}%` }}
+              style={{ top: `${(h - HOUR_START) * PX_PER_HOUR}px` }} />
+          ))}
+          {day.blocks.map(block => (
+            <TimelineBlock
+              key={block.id}
+              block={block}
+              onEdit={setEditingBlock}
+              onDelete={deleteBlock}
             />
           ))}
-          {day.blocks
-            .filter(b => b.startHour >= HOUR_START && b.endHour <= HOUR_END)
-            .map(block => (
-              <TimelineBlock key={block.id} block={block} onClick={setSelected} />
-            ))}
         </div>
       </div>
 
-      {/* ブロック追加 */}
+      {/* 追加ボタン */}
       <button
-        onClick={() => setShowAdd(v => !v)}
-        className="mt-3 flex items-center gap-1.5 text-xs text-slate-400 hover:text-navy-700 transition-colors"
+        onPointerDown={() => setEditingBlock({ startHour: 7, endHour: 8, userId: 'both', requiredFeatures: [] })}
+        className="mt-4 w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-slate-200 rounded-2xl text-sm text-slate-400 hover:border-navy-300 hover:text-navy-600 transition-colors"
       >
-        {showAdd ? <ChevronUp size={13} /> : <Plus size={13} />}
-        ブロックを追加
+        <Plus size={15} /> ブロックを追加
       </button>
 
-      {showAdd && (
-        <div className="mt-2 bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">ラベル</label>
-              <input
-                type="text"
-                value={newBlock.label ?? ''}
-                onChange={e => setNewBlock(v => ({ ...v, label: e.target.value }))}
-                className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-navy-400"
-                placeholder="例: 朝の準備"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">開始</label>
-              <input
-                type="number"
-                min={HOUR_START}
-                max={23}
-                value={newBlock.startHour}
-                onChange={e => setNewBlock(v => ({ ...v, startHour: Number(e.target.value) }))}
-                className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">終了</label>
-              <input
-                type="number"
-                min={6}
-                max={HOUR_END}
-                value={newBlock.endHour}
-                onChange={e => setNewBlock(v => ({ ...v, endHour: Number(e.target.value) }))}
-                className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none"
-              />
-            </div>
-          </div>
-          <button
-            onClick={addBlock}
-            className="text-xs px-4 py-1.5 bg-navy-900 text-white rounded-lg hover:bg-navy-800 transition"
-          >
-            追加する
-          </button>
-        </div>
-      )}
-
       {/* 必要設備まとめ */}
-      {day.blocks.flatMap(b => b.requiredFeatures).length > 0 && (
-        <div className="mt-5">
-          <p className="text-xs text-slate-500 font-medium mb-2">このルーティンで必要な条件</p>
+      {allFeatures.length > 0 && (
+        <div className="mt-5 bg-navy-50 rounded-2xl border border-navy-100 p-4">
+          <p className="text-xs font-bold text-navy-700 mb-2">このルーティンで必要な条件</p>
           <div className="flex flex-wrap gap-1.5">
-            {[...new Set(day.blocks.flatMap(b => b.requiredFeatures))].map(f => (
-              <span key={f} className="text-xs px-2.5 py-1 bg-navy-50 text-navy-700 rounded-full border border-navy-100">
+            {allFeatures.map(f => (
+              <span key={f} className="text-xs px-2.5 py-1 bg-white text-navy-700 rounded-full border border-navy-200">
                 {f}
               </span>
             ))}
@@ -383,52 +306,30 @@ export default function RoutinePage() {
   const [activeDay, setActiveDay] = useState<DayType>('weekday');
 
   useEffect(() => {
-    fetchRoutineDays().then(data => {
-      setDays(data);
-      setLoading(false);
-    });
+    fetchRoutineDays().then(data => { setDays(data); setLoading(false); });
   }, []);
 
   const updateDay = (updated: RoutineDay) => {
-    setDays(prev => prev.map(d => (d.id === updated.id ? updated : d)));
+    setDays(prev => prev.map(d => d.id === updated.id ? updated : d));
   };
 
   const currentDay = days.find(d => d.dayType === activeDay);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-navy-900 tracking-tight">ルーティンシミュレーター</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          平日・休日の生活動線を可視化して、必要な間取り・設備条件を洗い出しましょう。
-        </p>
+        <h1 className="text-2xl font-bold text-navy-900 tracking-tight">ルーティン</h1>
+        <p className="mt-1 text-sm text-slate-500">ブロックをホバー→✏️で編集、＋で追加</p>
       </div>
 
-      {/* 凡例 */}
-      <div className="flex gap-4">
-        {Object.entries(USER_LABELS).map(([key, label]) => (
-          <span key={key} className="flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: USER_COLORS[key] }} />
-            {label}
-          </span>
-        ))}
-      </div>
-
-      {/* タブ */}
       <div className="flex gap-2">
-        {([
-          { type: 'weekday' as DayType, label: '平日' },
-          { type: 'weekend' as DayType, label: '休日' },
-        ]).map(({ type, label }) => (
-          <button
-            key={type}
-            onClick={() => setActiveDay(type)}
-            className={`px-5 py-2 rounded-xl text-sm font-medium border transition-all ${
+        {([{ type: 'weekday' as DayType, label: '平日' }, { type: 'weekend' as DayType, label: '休日' }]).map(({ type, label }) => (
+          <button key={type} onPointerDown={() => setActiveDay(type)}
+            className={`flex-1 py-3 rounded-2xl text-sm font-semibold border-2 transition-all ${
               activeDay === type
                 ? 'bg-navy-900 text-white border-navy-900'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-            }`}
-          >
+                : 'bg-white text-slate-500 border-slate-200'
+            }`}>
             {label}
           </button>
         ))}
@@ -436,55 +337,9 @@ export default function RoutinePage() {
 
       {loading ? (
         <div className="text-center py-16 text-slate-400 text-sm">読み込み中...</div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-semibold text-navy-900 text-sm">
-              {activeDay === 'weekday' ? '平日のルーティン' : '休日のルーティン'}
-            </h2>
-            <span className="text-xs text-slate-400">クリックで編集</span>
-          </div>
-          {currentDay ? (
-            <DayTimeline day={currentDay} onUpdate={updateDay} />
-          ) : (
-            <p className="text-xs text-slate-400">データがありません</p>
-          )}
-        </div>
-      )}
-
-      {/* メモブロック一覧 */}
-      {!loading && currentDay && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-navy-900">各ブロックのメモ</h2>
-          {currentDay.blocks.map(b => (
-            <div key={b.id} className="bg-white rounded-xl border border-slate-100 p-4 flex gap-3 items-start">
-              <span
-                className="mt-0.5 w-3 h-3 rounded-sm shrink-0"
-                style={{ backgroundColor: b.color }}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold text-navy-900">{b.label}</span>
-                  <span className="text-xs text-slate-400">{b.startHour}:00–{b.endHour}:00</span>
-                  <span className="text-xs px-2 py-0.5 bg-slate-50 text-slate-500 rounded-full border border-slate-100">
-                    {USER_LABELS[b.userId]}
-                  </span>
-                </div>
-                {b.note && <p className="mt-1 text-xs text-slate-500 leading-relaxed">{b.note}</p>}
-                {b.requiredFeatures.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {b.requiredFeatures.map(f => (
-                      <span key={f} className="text-xs px-2 py-0.5 bg-navy-50 text-navy-700 rounded-full border border-navy-100">
-                        {f}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      ) : currentDay ? (
+        <DayTimeline day={currentDay} onUpdate={updateDay} />
+      ) : null}
     </div>
   );
 }
