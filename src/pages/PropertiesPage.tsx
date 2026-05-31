@@ -46,7 +46,6 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
     if (!url.trim()) return;
     setLoading(true); setError('');
     try {
-      // GAS API 経由でスクレイピング（未設定時はMock）
       const gasUrl = import.meta.env.VITE_GAS_URL;
       if (gasUrl) {
         const res = await fetch(`${gasUrl}?action=scrapeProperty&url=${encodeURIComponent(url)}`, { redirect: 'follow' });
@@ -54,9 +53,26 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         if (json.error) throw new Error(json.error);
         if (json.data) { setForm({ ...json.data, url }); setManual(true); return; }
       }
-      // Mockフォールバック
-      await new Promise(r => setTimeout(r, 1000));
-      setForm({ name: 'SUUMOから取得（Mock）', rent: 180000, layout: '2LDK', sqm: 55.0, url, address: '渋谷区○○', metAt: new Date().toISOString().slice(0, 10) });
+      // GAS未設定時: URLからページタイトルをCORSプロキシ経由で取得を試みる
+      let guessedName = '';
+      try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl);
+        const json = await res.json() as { contents?: string };
+        if (json.contents) {
+          const m = json.contents.match(/<title[^>]*>([^<]+)<\/title>/i);
+          if (m) {
+            // SUUMOやat-homeのタイトルから末尾の「| SUUMO」などを除去
+            guessedName = m[1]
+              .replace(/\s*[\|｜]\s*.+$/, '')
+              .replace(/\s*-\s*.+$/, '')
+              .trim();
+          }
+        }
+      } catch {
+        // プロキシ失敗は無視
+      }
+      setForm(f => ({ ...f, name: guessedName, url, metAt: new Date().toISOString().slice(0, 10) }));
       setManual(true);
     } catch (e) {
       setError('読み取りに失敗しました。手動で入力してください。');
@@ -113,6 +129,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
             <div>
               <label className="block text-xs text-slate-500 mb-1">物件名 *</label>
               <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                autoFocus
                 className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" placeholder="例: ○○マンション" />
             </div>
             <div className="grid grid-cols-2 gap-3">
