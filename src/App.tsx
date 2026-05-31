@@ -4,6 +4,7 @@ import ValuesPage from './pages/ValuesPage';
 import PropertiesPage from './pages/PropertiesPage';
 import RoutinePage from './pages/RoutinePage';
 import TasksPage from './pages/TasksPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="properties" element={<PropertiesPage />} />
           <Route path="routine" element={<RoutinePage />} />
           <Route path="tasks" element={<TasksPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,11 +1,11 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { Heart, Home, Calendar, CheckSquare } from 'lucide-react';
+import { NavLink, Outlet, Link } from 'react-router-dom';
+import { Heart, Home, Calendar, CheckSquare, Settings } from 'lucide-react';
 
 const navItems = [
-  { to: '/',           label: '条件',   icon: Heart },
-  { to: '/properties', label: '物件',   icon: Home },
+  { to: '/',           label: '条件',      icon: Heart },
+  { to: '/properties', label: '物件',      icon: Home },
   { to: '/routine',    label: 'ルーティン', icon: Calendar },
-  { to: '/tasks',      label: 'タスク', icon: CheckSquare },
+  { to: '/tasks',      label: 'タスク',    icon: CheckSquare },
 ];
 
 export default function Layout() {
@@ -19,6 +19,9 @@ export default function Layout() {
           </div>
           <span className="font-semibold tracking-tight text-sm">すまいシェア</span>
           <span className="ml-auto text-xs text-white/40">あきひろ & あかり</span>
+          <Link to="/settings" className="ml-3 p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+            <Settings size={16} className="text-white/60" />
+          </Link>
         </div>
       </header>
 

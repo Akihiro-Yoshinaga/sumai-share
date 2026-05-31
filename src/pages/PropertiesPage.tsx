@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus } from 'lucide-react';
+import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { fetchProperties } from '../mockData';
 import type { Property, PropertyRating } from '../types';
+import { getGeminiApiKey } from './SettingsPage';
 
 const PARTNERS = [
   { key: 'akihiro' as const, label: 'あきひろ' },
@@ -48,24 +50,56 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
     setLoading(true); setError('');
     const reader = new FileReader();
     reader.onload = async () => {
-      const dataUrl   = reader.result as string;
-      const base64    = dataUrl.split(',')[1];
-      const mimeType  = file.type || 'image/jpeg';
+      const dataUrl  = reader.result as string;
+      const base64   = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
       setPreviewSrc(dataUrl);
       try {
-        const gasUrl = import.meta.env.VITE_GAS_URL;
-        if (!gasUrl) throw new Error('GAS_URL未設定');
-        const res  = await fetch(gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'scrapeProperty', imageBase64: base64, mimeType }),
-        });
-        const json = await res.json() as { data?: FormData; error?: string };
-        if (json.error) throw new Error(json.error);
-        if (json.data)  setForm(f => ({ ...f, ...json.data }));
+        const apiKey = getGeminiApiKey();
+        if (!apiKey) throw new Error('no_key');
+
+        const prompt = [
+          'この画像は不動産サイト（SUUMO・アットホーム等）の物件ページのスクリーンショットです。',
+          '以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
+          '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所", "note": "特記事項" }',
+          'JSONのみ返してください。説明文は不要です。',
+        ].join('\n');
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType, data: base64 } },
+              ]}],
+              generationConfig: { temperature: 0 },
+            }),
+          }
+        );
+        if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
+        const json = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
+        const text = json.candidates[0].content.parts[0].text;
+        const m    = text.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('JSON not found');
+        const data = JSON.parse(m[0]);
+        setForm(f => ({
+          ...f,
+          name:    data.name    || '',
+          rent:    Number(data.rent)  || 0,
+          layout:  data.layout  || '',
+          sqm:     Number(data.sqm)   || 0,
+          address: data.address || '',
+        }));
         setStep('form');
       } catch (e) {
-        setError(e instanceof Error ? e.message : '解析に失敗しました');
+        if (e instanceof Error && e.message === 'no_key') {
+          setError('no_key');
+        } else {
+          setError(e instanceof Error ? e.message : '解析に失敗しました');
+        }
         setStep('form');
       } finally { setLoading(false); }
     };
@@ -132,7 +166,15 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                 </>
               )}
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error === 'no_key' ? (
+              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                <Settings size={13} className="shrink-0" />
+                <span>Gemini APIキーが未設定です。</span>
+                <Link to="/settings" className="underline font-semibold shrink-0">設定する →</Link>
+              </div>
+            ) : error ? (
+              <p className="text-xs text-red-500">{error}</p>
+            ) : null}
             <button onPointerDown={() => setStep('form')}
               className="w-full text-xs text-slate-400 hover:text-slate-600 py-2 border border-dashed border-slate-200 rounded-xl transition-colors">
               手動で入力する
@@ -153,7 +195,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                 </span>
               </div>
             )}
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && error !== 'no_key' && <p className="text-xs text-red-500">{error}</p>}
             <div>
               <label className="block text-xs text-slate-500 mb-1">物件名 *</label>
               <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
