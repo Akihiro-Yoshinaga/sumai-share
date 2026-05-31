@@ -4,7 +4,7 @@ var ALLOWED_EMAILS = [
 ];
 
 var SPREADSHEET_ID   = '1yEtOotpg8UiVIshdAAUnrvnA3PWDOvHfA0rN_iGEbPQ';
-var SHEET_CONDITIONS = '表_1';
+var SHEET_CONDITIONS = '物件リサーチ要件一覧';
 var SHEET_PROPERTIES = '物件';
 var SHEET_ROUTINES   = 'ルーティン';
 var SHEET_TASKS      = 'タスク';
