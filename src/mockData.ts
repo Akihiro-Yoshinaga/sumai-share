@@ -163,9 +163,21 @@ export async function fetchTags(): Promise<Tag[]> {
   return mockTags;
 }
 
+const PROPERTIES_KEY = 'sumai_properties';
+
 export async function fetchProperties(): Promise<Property[]> {
-  await new Promise(r => setTimeout(r, 600));
+  await new Promise(r => setTimeout(r, 300));
+  try {
+    const saved = localStorage.getItem(PROPERTIES_KEY);
+    if (saved) return JSON.parse(saved) as Property[];
+  } catch { /* ignore */ }
   return mockProperties;
+}
+
+export function saveProperties(properties: Property[]): void {
+  try {
+    localStorage.setItem(PROPERTIES_KEY, JSON.stringify(properties));
+  } catch { /* ignore */ }
 }
 
 export async function fetchRoutineDays(): Promise<RoutineDay[]> {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { fetchProperties } from '../mockData';
+import { fetchProperties, saveProperties } from '../mockData';
 import type { Property, PropertyRating } from '../types';
 import { getGeminiApiKey } from './SettingsPage';
 
@@ -56,8 +56,6 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
       reader.readAsDataURL(file);
     });
 
-  const [inputUrl, setInputUrl] = useState('');
-
   const analyzeImages = async (files: File[]) => {
     if (!files.length) return;
     setLoading(true); setError('');
@@ -104,7 +102,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         layout:  data.layout  || '',
         sqm:     Number(data.sqm)   || 0,
         address: data.address || '',
-        url:     inputUrl.trim() || f.url,
+        url:     f.url,
       }));
       setStep('form');
     } catch (e) {
@@ -173,18 +171,6 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                 </>
               )}
             </div>
-            {/* URL入力（任意） */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">物件URL（任意）</label>
-              <input
-                type="url"
-                value={inputUrl}
-                onChange={e => setInputUrl(e.target.value)}
-                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400"
-                placeholder="https://www.athome.co.jp/..."
-              />
-            </div>
-
             {error === 'no_key' ? (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
                 <Settings size={13} className="shrink-0" />
@@ -194,7 +180,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
             ) : error ? (
               <p className="text-xs text-red-500">{error}</p>
             ) : null}
-            <button onPointerDown={() => { setForm(f => ({ ...f, url: inputUrl.trim() })); setStep('form'); }}
+            <button onPointerDown={() => setStep('form')}
               className="w-full text-xs text-slate-400 hover:text-slate-600 py-2 border border-dashed border-slate-200 rounded-xl transition-colors">
               手動で入力する
             </button>
@@ -406,7 +392,14 @@ export default function PropertiesPage() {
       {showAdd && (
         <AddPropertyModal
           onClose={() => setShowAdd(false)}
-          onAdd={p => { setProperties(prev => [p, ...prev]); setShowAdd(false); }}
+          onAdd={p => {
+          setProperties(prev => {
+            const next = [p, ...prev];
+            saveProperties(next);
+            return next;
+          });
+          setShowAdd(false);
+        }}
         />
       )}
 
@@ -445,7 +438,11 @@ export default function PropertiesPage() {
           <div className="space-y-4">
             {sorted.map(p => (
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
-                onDelete={id => setProperties(prev => prev.filter(p => p.id !== id))} />
+                onDelete={id => setProperties(prev => {
+                  const next = prev.filter(p => p.id !== id);
+                  saveProperties(next);
+                  return next;
+                })} />
             ))}
           </div>
           <button onPointerDown={() => setShowAdd(true)}
