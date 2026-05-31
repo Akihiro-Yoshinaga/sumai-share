@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { fetchProperties, saveProperties } from '../mockData';
+import { apiGetProperties, apiSaveProperties } from '../api';
 import type { Property, PropertyRating } from '../types';
 import { getGeminiApiKey } from './SettingsPage';
 
@@ -378,7 +378,7 @@ export default function PropertiesPage() {
   const MUST_COUNT = 7;
 
   useEffect(() => {
-    fetchProperties().then(data => { setProperties(data); setLoading(false); });
+    apiGetProperties().then(data => { setProperties(data); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const sorted = [...properties].sort((a, b) => {
@@ -393,13 +393,13 @@ export default function PropertiesPage() {
         <AddPropertyModal
           onClose={() => setShowAdd(false)}
           onAdd={p => {
-          setProperties(prev => {
-            const next = [p, ...prev];
-            saveProperties(next);
-            return next;
-          });
-          setShowAdd(false);
-        }}
+            setProperties(prev => {
+              const next = [p, ...prev];
+              apiSaveProperties(next).catch(console.error);
+              return next;
+            });
+            setShowAdd(false);
+          }}
         />
       )}
 
@@ -440,7 +440,7 @@ export default function PropertiesPage() {
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
                 onDelete={id => setProperties(prev => {
                   const next = prev.filter(p => p.id !== id);
-                  saveProperties(next);
+                  apiSaveProperties(next).catch(console.error);
                   return next;
                 })} />
             ))}
