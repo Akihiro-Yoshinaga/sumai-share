@@ -1,20 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, X, Tag, Pencil, Trash2 } from 'lucide-react';
+import { X, Tag, Pencil, Trash2 } from 'lucide-react';
 import { fetchRoutineDays } from '../mockData';
 import type { RoutineDay, RoutineBlock, DayType } from '../types';
 
 const USER_CONFIG = {
-  akihiro: { label: 'あきひろ', color: '#334e68', text: '#fff' },
-  akari:   { label: 'あかり',   color: '#9fb3c8', text: '#243b53' },
-  both:    { label: '2人',      color: '#243b53', text: '#fff' },
+  akihiro: { label: 'あきひろ', color: '#dbeafe', border: '#93c5fd', text: '#1e3a5f' }, // 薄いネイビー
+  akari:   { label: 'あかり',   color: '#fee2e2', border: '#fca5a5', text: '#7f1d1d' }, // 薄い赤
+  both:    { label: '2人',      color: '#243b53', border: '#243b53', text: '#ffffff' }, // 濃紺
 } as const;
 
 type UserId = keyof typeof USER_CONFIG;
 
-const HOUR_START = 5;
-const HOUR_END   = 24;
-const TOTAL_HOURS = HOUR_END - HOUR_START;
-const PX_PER_HOUR = 56;
+const HOUR_START   = 5;
+const HOUR_END     = 24;
+const TOTAL_HOURS  = HOUR_END - HOUR_START;
+const PX_PER_HOUR  = 60;
 
 function TimelineBlock({
   block,
@@ -31,31 +31,32 @@ function TimelineBlock({
 
   return (
     <div
-      className="absolute left-1 right-1 rounded-xl px-2.5 py-1.5 overflow-hidden group"
+      className="absolute left-1 right-1 rounded-xl px-2.5 py-1.5 overflow-hidden group cursor-pointer select-none"
       style={{
         top: `${top}px`,
-        height: `${height}px`,
+        height: `${Math.max(height, 32)}px`,
         backgroundColor: cfg.color,
+        border: `1.5px solid ${cfg.border}`,
         color: cfg.text,
-        minHeight: '32px',
       }}
+      onPointerDown={e => { e.stopPropagation(); onEdit(block); }}
     >
       <p className="text-xs font-bold leading-tight truncate">{block.label}</p>
       <p className="text-xs opacity-60 leading-tight">{block.startHour}:00–{block.endHour}:00</p>
-      {height >= 56 && block.note && (
+      {height >= 72 && block.note && (
         <p className="text-xs opacity-50 leading-tight mt-0.5 line-clamp-2">{block.note}</p>
       )}
-      {/* 編集・削除ボタン */}
+      {/* 編集・削除ボタン（hover/active時） */}
       <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
         <button
-          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onEdit(block); }}
-          className="w-6 h-6 rounded-md bg-black/20 hover:bg-black/40 flex items-center justify-center transition-colors"
+          onPointerDown={e => { e.stopPropagation(); onEdit(block); }}
+          className="w-6 h-6 rounded-md bg-black/10 hover:bg-black/25 flex items-center justify-center transition-colors"
         >
           <Pencil size={11} />
         </button>
         <button
-          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); onDelete(block.id); }}
-          className="w-6 h-6 rounded-md bg-black/20 hover:bg-red-500 flex items-center justify-center transition-colors"
+          onPointerDown={e => { e.stopPropagation(); onDelete(block.id); }}
+          className="w-6 h-6 rounded-md bg-black/10 hover:bg-red-400 hover:text-white flex items-center justify-center transition-colors"
         >
           <Trash2 size={11} />
         </button>
@@ -73,7 +74,11 @@ function BlockModal({
   onClose: () => void;
   onSave: (b: RoutineBlock) => void;
 }) {
-  const [local, setLocal] = useState<Partial<RoutineBlock>>({ ...block });
+  const [local, setLocal] = useState<Partial<RoutineBlock>>({
+    userId: 'both',
+    requiredFeatures: [],
+    ...block,
+  });
   const [featInput, setFeatInput] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -87,14 +92,15 @@ function BlockModal({
 
   const save = () => {
     if (!local.label?.trim()) return;
+    const uid = (local.userId ?? 'both') as UserId;
     onSave({
-      id: local.id ?? `b${Date.now()}`,
-      label: local.label,
-      startHour: local.startHour ?? 7,
-      endHour: local.endHour ?? 8,
-      userId: (local.userId ?? 'both') as UserId,
-      color: USER_CONFIG[(local.userId ?? 'both') as UserId]?.color ?? '#243b53',
-      note: local.note ?? '',
+      id:               local.id ?? `b${Date.now()}`,
+      label:            local.label,
+      startHour:        local.startHour ?? 7,
+      endHour:          local.endHour ?? 8,
+      userId:           uid,
+      color:            USER_CONFIG[uid].color,
+      note:             local.note ?? '',
       requiredFeatures: local.requiredFeatures ?? [],
     });
   };
@@ -120,6 +126,7 @@ function BlockModal({
           <label className="block text-xs text-slate-500 mb-1">ラベル *</label>
           <input type="text" value={local.label ?? ''} autoFocus
             onChange={e => setLocal(v => ({ ...v, label: e.target.value }))}
+            onKeyDown={e => e.key === 'Enter' && save()}
             className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400 focus:ring-2 focus:ring-navy-100"
             placeholder="例: 朝の準備" />
         </div>
@@ -147,9 +154,9 @@ function BlockModal({
             {(Object.entries(USER_CONFIG) as [UserId, typeof USER_CONFIG[UserId]][]).map(([key, cfg]) => (
               <button key={key}
                 onPointerDown={e => { e.preventDefault(); setLocal(v => ({ ...v, userId: key })); }}
-                className="py-2 rounded-xl text-sm font-semibold border-2 transition-all"
+                className="py-2.5 rounded-xl text-sm font-semibold border-2 transition-all"
                 style={local.userId === key
-                  ? { backgroundColor: cfg.color, color: cfg.text, borderColor: cfg.color }
+                  ? { backgroundColor: cfg.color, color: cfg.text, borderColor: cfg.border }
                   : { backgroundColor: 'white', color: '#64748b', borderColor: '#e2e8f0' }
                 }>
                 {cfg.label}
@@ -199,14 +206,9 @@ function BlockModal({
   );
 }
 
-function DayTimeline({
-  day,
-  onUpdate,
-}: {
-  day: RoutineDay;
-  onUpdate: (d: RoutineDay) => void;
-}) {
+function DayTimeline({ day, onUpdate }: { day: RoutineDay; onUpdate: (d: RoutineDay) => void }) {
   const [editingBlock, setEditingBlock] = useState<Partial<RoutineBlock> | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const hours = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => HOUR_START + i);
 
   const saveBlock = (saved: RoutineBlock) => {
@@ -222,6 +224,18 @@ function DayTimeline({
     onUpdate({ ...day, blocks: day.blocks.filter(b => b.id !== id) });
   };
 
+  // グリッドをタップ→その時間でモーダルを開く
+  const handleGridTap = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!gridRef.current) return;
+    // ブロック上のタップは TimelineBlock 側で stopPropagation しているので素通りしない
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const rawHour = HOUR_START + y / PX_PER_HOUR;
+    const startHour = Math.max(HOUR_START, Math.min(HOUR_END - 1, Math.floor(rawHour)));
+    const endHour   = Math.min(HOUR_END, startHour + 1);
+    setEditingBlock({ startHour, endHour, userId: 'both', requiredFeatures: [] });
+  };
+
   const allFeatures = [...new Set(day.blocks.flatMap(b => b.requiredFeatures))];
 
   return (
@@ -235,19 +249,19 @@ function DayTimeline({
       )}
 
       {/* 凡例 */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-4 mb-4">
         {(Object.entries(USER_CONFIG) as [UserId, typeof USER_CONFIG[UserId]][]).map(([key, cfg]) => (
           <span key={key} className="flex items-center gap-1.5 text-xs text-slate-600">
-            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: cfg.color }} />
+            <span className="w-3 h-3 rounded-sm border" style={{ backgroundColor: cfg.color, borderColor: cfg.border }} />
             {cfg.label}
           </span>
         ))}
       </div>
 
       {/* タイムライン */}
-      <div className="flex gap-0 relative" style={{ height: `${TOTAL_HOURS * PX_PER_HOUR}px` }}>
+      <div className="flex" style={{ height: `${TOTAL_HOURS * PX_PER_HOUR}px` }}>
         {/* 時刻ラベル */}
-        <div className="relative w-10 shrink-0">
+        <div className="relative w-10 shrink-0 select-none">
           {hours.map(h => (
             <div key={h}
               className="absolute right-2 text-xs text-slate-300 -translate-y-2.5"
@@ -257,31 +271,37 @@ function DayTimeline({
           ))}
         </div>
 
-        {/* グリッド + ブロック */}
-        <div className="relative flex-1 border-l border-slate-100">
+        {/* グリッド（タップで追加） */}
+        <div
+          ref={gridRef}
+          className="relative flex-1 border-l border-slate-100 cursor-crosshair"
+          onPointerDown={handleGridTap}
+        >
+          {/* 時間線 */}
           {hours.map(h => (
             <div key={h}
-              className="absolute w-full border-t border-slate-100"
-              style={{ top: `${(h - HOUR_START) * PX_PER_HOUR}px` }} />
+              className="absolute w-full border-t border-slate-100 pointer-events-none"
+              style={{ top: `${(h - HOUR_START) * PX_PER_HOUR}px` }}>
+              {/* 30分線（薄く） */}
+              <div className="absolute w-full border-t border-slate-50"
+                style={{ top: `${PX_PER_HOUR / 2}px` }} />
+            </div>
           ))}
+
+          {/* ブロック */}
           {day.blocks.map(block => (
             <TimelineBlock
               key={block.id}
               block={block}
-              onEdit={setEditingBlock}
+              onEdit={b => setEditingBlock(b)}
               onDelete={deleteBlock}
             />
           ))}
         </div>
       </div>
 
-      {/* 追加ボタン */}
-      <button
-        onPointerDown={() => setEditingBlock({ startHour: 7, endHour: 8, userId: 'both', requiredFeatures: [] })}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-slate-200 rounded-2xl text-sm text-slate-400 hover:border-navy-300 hover:text-navy-600 transition-colors"
-      >
-        <Plus size={15} /> ブロックを追加
-      </button>
+      {/* 説明テキスト */}
+      <p className="mt-2 text-center text-xs text-slate-300">タイムラインをタップして予定を追加 · ブロックをタップして編集</p>
 
       {/* 必要設備まとめ */}
       {allFeatures.length > 0 && (
@@ -319,11 +339,14 @@ export default function RoutinePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-navy-900 tracking-tight">ルーティン</h1>
-        <p className="mt-1 text-sm text-slate-500">ブロックをホバー→✏️で編集、＋で追加</p>
+        <p className="mt-1 text-sm text-slate-500">タイムラインをタップして予定を追加</p>
       </div>
 
       <div className="flex gap-2">
-        {([{ type: 'weekday' as DayType, label: '平日' }, { type: 'weekend' as DayType, label: '休日' }]).map(({ type, label }) => (
+        {([
+          { type: 'weekday' as DayType, label: '平日' },
+          { type: 'weekend' as DayType, label: '休日' },
+        ]).map(({ type, label }) => (
           <button key={type} onPointerDown={() => setActiveDay(type)}
             className={`flex-1 py-3 rounded-2xl text-sm font-semibold border-2 transition-all ${
               activeDay === type
