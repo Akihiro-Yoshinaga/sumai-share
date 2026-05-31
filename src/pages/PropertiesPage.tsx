@@ -359,17 +359,29 @@ function PropertyCard({ property, mustCount, onDelete }: { property: Property; m
   );
 }
 
+type SortKey = 'must' | 'newest';
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'must',   label: '適合順' },
+  { key: 'newest', label: '新着順' },
+];
+
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const MUST_COUNT = 7; // mockTags のMUST件数
+  const [loading, setLoading]       = useState(true);
+  const [showAdd, setShowAdd]       = useState(false);
+  const [sortKey, setSortKey]       = useState<SortKey>('newest');
+  const MUST_COUNT = 7;
 
   useEffect(() => {
     fetchProperties().then(data => { setProperties(data); setLoading(false); });
   }, []);
 
-  const sorted = [...properties].sort((a, b) => b.mustTagIds.length - a.mustTagIds.length);
+  const sorted = [...properties].sort((a, b) => {
+    if (sortKey === 'must')   return b.mustTagIds.length - a.mustTagIds.length;
+    // newest: idがb${Date.now()}形式なので数値が大きい方が新しい
+    return b.id.localeCompare(a.id);
+  });
 
   return (
     <div className="space-y-6">
@@ -397,7 +409,21 @@ export default function PropertiesPage() {
         </div>
       ) : (
         <>
-          <p className="text-xs text-slate-400">{properties.length}件 · MUST適合率順</p>
+          {/* 並び替えタブ */}
+          <div className="flex gap-2">
+            {SORT_OPTIONS.map(({ key, label }) => (
+              <button key={key} onPointerDown={() => setSortKey(key)}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                  sortKey === key
+                    ? 'bg-navy-900 text-white border-navy-900'
+                    : 'bg-white text-slate-500 border-slate-200'
+                }`}>
+                {label}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-slate-400 self-center">{properties.length}件</span>
+          </div>
+
           <div className="space-y-4">
             {sorted.map(p => (
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
