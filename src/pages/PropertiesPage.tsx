@@ -37,84 +37,85 @@ function ScoreBar({ score }: { score: number }) {
 type FormData = Omit<Property, 'id' | 'ratings' | 'mustTagIds'>;
 
 function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: Property) => void }) {
-  const [step, setStep]       = useState<'top' | 'form'>('top');
-  const [loading, setLoading] = useState(false);
-  const [previewSrc, setPreviewSrc] = useState('');
-  const [form, setForm]       = useState<FormData>({
+  const [step, setStep]         = useState<'top' | 'form'>('top');
+  const [loading, setLoading]   = useState(false);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [form, setForm]         = useState<FormData>({
     name: '', rent: 0, layout: '', sqm: 0, url: '', address: '', metAt: new Date().toISOString().slice(0, 10),
   });
-  const [error, setError]     = useState('');
-  const fileInputRef          = useRef<HTMLInputElement>(null);
+  const [error, setError]       = useState('');
+  const fileInputRef            = useRef<HTMLInputElement>(null);
 
-  const analyzeImage = async (file: File) => {
+  const fileToBase64 = (file: File): Promise<{ base64: string; mimeType: string; dataUrl: string }> =>
+    new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        resolve({ base64: dataUrl.split(',')[1], mimeType: file.type || 'image/jpeg', dataUrl });
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const analyzeImages = async (files: File[]) => {
+    if (!files.length) return;
     setLoading(true); setError('');
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl  = reader.result as string;
-      const base64   = dataUrl.split(',')[1];
-      const mimeType = file.type || 'image/jpeg';
-      setPreviewSrc(dataUrl);
-      try {
-        const apiKey = getGeminiApiKey();
-        if (!apiKey) throw new Error('no_key');
+    try {
+      const apiKey = getGeminiApiKey();
+      if (!apiKey) throw new Error('no_key');
 
-        const prompt = [
-          'この画像は不動産サイト（SUUMO・アットホーム等）の物件ページのスクリーンショットです。',
-          '以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
-          '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所", "note": "特記事項" }',
-          'JSONのみ返してください。説明文は不要です。',
-        ].join('\n');
+      const converted = await Promise.all(files.map(fileToBase64));
+      setPreviews(converted.map(c => c.dataUrl));
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [
-                { text: prompt },
-                { inline_data: { mime_type: mimeType, data: base64 } },
-              ]}],
-              generationConfig: { temperature: 0 },
-            }),
-          }
-        );
-        if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
-        const json = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
-        const text = json.candidates[0].content.parts[0].text;
-        const m    = text.match(/\{[\s\S]*\}/);
-        if (!m) throw new Error('JSON not found');
-        const data = JSON.parse(m[0]);
-        setForm(f => ({
-          ...f,
-          name:    data.name    || '',
-          rent:    Number(data.rent)  || 0,
-          layout:  data.layout  || '',
-          sqm:     Number(data.sqm)   || 0,
-          address: data.address || '',
-        }));
-        setStep('form');
-      } catch (e) {
-        if (e instanceof Error && e.message === 'no_key') {
-          setError('no_key');
-        } else {
-          setError(e instanceof Error ? e.message : '解析に失敗しました');
+      const prompt = [
+        'これらの画像は同じ物件のスクリーンショットです（SUUMO・アットホーム等）。',
+        '複数の画像から情報を統合して、以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
+        '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所", "note": "特記事項" }',
+        'JSONのみ返してください。説明文は不要です。',
+      ].join('\n');
+
+      const imageParts = converted.map(c => ({ inline_data: { mime_type: c.mimeType, data: c.base64 } }));
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+            generationConfig: { temperature: 0 },
+          }),
         }
-        setStep('form');
-      } finally { setLoading(false); }
-    };
-    reader.readAsDataURL(file);
+      );
+      if (!res.ok) throw new Error(`Gemini error: ${res.status}`);
+      const json = await res.json() as { candidates: { content: { parts: { text: string }[] } }[] };
+      const text = json.candidates[0].content.parts[0].text;
+      const m    = text.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('JSON not found');
+      const data = JSON.parse(m[0]);
+      setForm(f => ({
+        ...f,
+        name:    data.name    || '',
+        rent:    Number(data.rent)  || 0,
+        layout:  data.layout  || '',
+        sqm:     Number(data.sqm)   || 0,
+        address: data.address || '',
+      }));
+      setStep('form');
+    } catch (e) {
+      setError(e instanceof Error && e.message === 'no_key' ? 'no_key' : (e instanceof Error ? e.message : '解析に失敗しました'));
+      setStep('form');
+    } finally { setLoading(false); }
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) analyzeImage(file);
+    const files = Array.from(e.target.files ?? []).filter(f => f.type.startsWith('image/'));
+    if (files.length) analyzeImages(files);
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) analyzeImage(file);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) analyzeImages(files);
   };
 
   const submit = () => {
@@ -138,7 +139,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         {step === 'top' && (
           <div className="space-y-3">
             {/* スクショアップロードゾーン */}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChange} />
             <div
               onPointerDown={() => fileInputRef.current?.click()}
               onDragOver={e => e.preventDefault()}
@@ -158,7 +159,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-semibold text-navy-800">スクショをアップロード</p>
-                    <p className="text-xs text-navy-400 mt-0.5">タップして選択、またはドラッグ＆ドロップ</p>
+                    <p className="text-xs text-navy-400 mt-0.5">複数枚まとめて選択OK · ドラッグ＆ドロップも可</p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-navy-600 bg-navy-200 px-3 py-1 rounded-full font-medium">
                     <Sparkles size={11} /> Geminiが自動で読み取ります
@@ -185,14 +186,19 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         {/* フォーム（スクショ解析後 or 手動） */}
         {step === 'form' && (
           <div className="space-y-3">
-            {/* 解析したスクショのサムネイル */}
-            {previewSrc && (
-              <div className="relative rounded-xl overflow-hidden border border-slate-100">
-                <img src={previewSrc} alt="スクショ" className="w-full h-28 object-cover object-top" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                <span className="absolute bottom-2 left-2 text-[10px] text-white bg-black/40 px-2 py-0.5 rounded-full">
-                  Geminiで解析済み
-                </span>
+            {/* 解析したスクショのサムネイル（複数） */}
+            {previews.length > 0 && (
+              <div className={`grid gap-1.5 ${previews.length === 1 ? 'grid-cols-1' : 'grid-cols-3'}`}>
+                {previews.map((src, i) => (
+                  <div key={i} className="relative rounded-xl overflow-hidden border border-slate-100 aspect-video">
+                    <img src={src} alt={`スクショ${i + 1}`} className="w-full h-full object-cover object-top" />
+                  </div>
+                ))}
+                <div className="col-span-full">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Sparkles size={9} /> {previews.length}枚をGeminiで解析済み
+                  </span>
+                </div>
               </div>
             )}
             {error && error !== 'no_key' && <p className="text-xs text-red-500">{error}</p>}
