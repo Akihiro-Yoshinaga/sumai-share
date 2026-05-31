@@ -53,25 +53,15 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
         if (json.error) throw new Error(json.error);
         if (json.data) { setForm({ ...json.data, url }); setManual(true); return; }
       }
-      // GAS未設定時: URLからページタイトルをCORSプロキシ経由で取得を試みる
+      // URLのドメインからサイト名を推測してプレースホルダーとして使う
       let guessedName = '';
       try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl);
-        const json = await res.json() as { contents?: string };
-        if (json.contents) {
-          const m = json.contents.match(/<title[^>]*>([^<]+)<\/title>/i);
-          if (m) {
-            // SUUMOやat-homeのタイトルから末尾の「| SUUMO」などを除去
-            guessedName = m[1]
-              .replace(/\s*[\|｜]\s*.+$/, '')
-              .replace(/\s*-\s*.+$/, '')
-              .trim();
-          }
-        }
-      } catch {
-        // プロキシ失敗は無視
-      }
+        const host = new URL(url).hostname;
+        if (host.includes('suumo')) guessedName = 'SUUMO物件';
+        else if (host.includes('athome')) guessedName = 'アットホーム物件';
+        else if (host.includes('homes') || host.includes('lifull')) guessedName = 'LIFULL HOME\'S物件';
+        else if (host.includes('chintai')) guessedName = 'CHINTAI物件';
+      } catch { /* invalid URL */ }
       setForm(f => ({ ...f, name: guessedName, url, metAt: new Date().toISOString().slice(0, 10) }));
       setManual(true);
     } catch (e) {
