@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Link } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { Heart, Home, Calendar, CheckSquare, Settings } from 'lucide-react';
 
 const navItems = [
@@ -6,6 +6,7 @@ const navItems = [
   { to: '/properties', label: '物件',      icon: Home },
   { to: '/routine',    label: 'ルーティン', icon: Calendar },
   { to: '/tasks',      label: 'タスク',    icon: CheckSquare },
+  { to: '/settings',   label: '設定',      icon: Settings },
 ];
 
 export default function Layout() {
@@ -19,9 +20,6 @@ export default function Layout() {
           </div>
           <span className="font-semibold tracking-tight text-sm">すまいシェア</span>
           <span className="ml-auto text-xs text-white/40">あきひろ & あかり</span>
-          <Link to="/settings" className="ml-3 p-1.5 rounded-lg hover:bg-white/10 transition-colors">
-            <Settings size={16} className="text-white/60" />
-          </Link>
         </div>
       </header>
 
@@ -32,7 +30,7 @@ export default function Layout() {
 
       {/* ボトムナビゲーション */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 safe-area-pb">
-        <div className="max-w-2xl mx-auto grid grid-cols-4">
+        <div className="max-w-2xl mx-auto grid grid-cols-5">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
