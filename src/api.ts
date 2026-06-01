@@ -32,16 +32,39 @@ export async function apiSaveProperties(properties: Property[]): Promise<void> {
   if (json.error) throw new Error(json.error);
 }
 
-// ===== Gemini画像解析 =====
+// ===== Gemini画像解析（フロント直接呼び出し） =====
 export async function apiAnalyzePropertyImages(
   images: { base64: string; mimeType: string }[]
 ): Promise<{ name: string; rent: number; layout: string; sqm: number; address: string }> {
-  const json = await gasGet('analyzePropertyImages', { body: JSON.stringify({ images }) }) as {
-    data?: { name: string; rent: number; layout: string; sqm: number; address: string };
-    error?: string;
-  };
-  if (json.error) throw new Error(json.error);
-  return json.data!;
+  const apiKey = localStorage.getItem('gemini_api_key');
+  if (!apiKey) throw new Error('no_key');
+
+  const prompt = [
+    'これらの画像は同じ物件のスクリーンショットです（SUUMO・アットホーム等）。',
+    '複数の画像から情報を統合して、以下のJSON形式で物件情報を抽出してください。値が読み取れない場合は空文字にしてください。',
+    '{ "name": "物件名", "rent": 家賃の数値(円単位・管理費除く), "layout": "間取り", "sqm": 専有面積の数値(m²), "address": "住所" }',
+    'JSONのみ返してください。説明文は不要です。'
+  ].join('\n');
+
+  const parts: unknown[] = [{ text: prompt }];
+  for (const img of images) {
+    parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
+  }
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0 } }),
+    }
+  );
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  const text: string = json.candidates[0].content.parts[0].text;
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('JSONが見つかりませんでした');
+  return JSON.parse(m[0]);
 }
 
 // ===== ルーティン =====
