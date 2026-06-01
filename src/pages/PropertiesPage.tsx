@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus } from 'lucide-react';
+import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Pencil } from 'lucide-react';
 import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages } from '../api';
 import type { Property, PropertyRating } from '../types';
 
@@ -34,13 +34,16 @@ function ScoreBar({ score }: { score: number }) {
 
 type FormData = Omit<Property, 'id' | 'ratings' | 'mustTagIds'>;
 
-function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: Property) => void }) {
-  const [step, setStep]         = useState<'top' | 'form'>('top');
+function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void; onAdd: (p: Property) => void; initialData?: Property }) {
+  const isEdit = !!initialData;
+  const [step, setStep]         = useState<'top' | 'form'>(isEdit ? 'form' : 'top');
   const [loading, setLoading]   = useState(false);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [form, setForm]         = useState<FormData>({
-    name: '', rent: 0, layout: '', sqm: 0, url: '', address: '', metAt: new Date().toISOString().slice(0, 10),
-  });
+  const [form, setForm]         = useState<FormData>(
+    isEdit
+      ? { name: initialData.name, rent: initialData.rent, layout: initialData.layout, sqm: initialData.sqm, url: initialData.url, address: initialData.address, metAt: initialData.metAt }
+      : { name: '', rent: 0, layout: '', sqm: 0, url: '', address: '', metAt: new Date().toISOString().slice(0, 10) }
+  );
   const [error, setError]       = useState('');
   const fileInputRef            = useRef<HTMLInputElement>(null);
 
@@ -91,10 +94,14 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
 
   const submit = () => {
     if (!form.name.trim()) return;
-    onAdd({ ...form, id: `p${Date.now()}`, ratings: [
-      { userId: 'akihiro', stars: 0, compromise: '' },
-      { userId: 'akari',   stars: 0, compromise: '' },
-    ], mustTagIds: [] });
+    if (isEdit) {
+      onAdd({ ...initialData!, ...form });
+    } else {
+      onAdd({ ...form, id: `p${Date.now()}`, ratings: [
+        { userId: 'akihiro', stars: 0, compromise: '' },
+        { userId: 'akari',   stars: 0, compromise: '' },
+      ], mustTagIds: [] });
+    }
   };
 
   return (
@@ -102,7 +109,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
       onPointerDown={e => { if (e.currentTarget === e.target) onClose(); }}>
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" onPointerDown={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-navy-900">物件を追加</h3>
+          <h3 className="font-bold text-navy-900">{isEdit ? '物件を編集' : '物件を追加'}</h3>
           <button onPointerDown={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"><X size={18} /></button>
         </div>
 
@@ -210,7 +217,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
               </button>
               <button onPointerDown={e => { e.preventDefault(); submit(); }}
                 className="flex-1 bg-navy-900 text-white text-sm font-semibold py-3 rounded-xl hover:bg-navy-800 transition-colors">
-                追加する
+                {isEdit ? '保存する' : '追加する'}
               </button>
             </div>
           </div>
@@ -220,7 +227,7 @@ function AddPropertyModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: 
   );
 }
 
-function PropertyCard({ property, mustCount, onDelete, onRatingChange }: { property: Property; mustCount: number; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void }) {
+function PropertyCard({ property, mustCount, onDelete, onRatingChange, onEdit }: { property: Property; mustCount: number; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const score = mustCount === 0 ? 0 : Math.round((property.mustTagIds.length / mustCount) * 100);
@@ -252,6 +259,10 @@ function PropertyCard({ property, mustCount, onDelete, onRatingChange }: { prope
                 <ExternalLink size={12} /> 物件を見る
               </a>
             )}
+            <button onPointerDown={() => onEdit(property)}
+              className="p-1.5 text-slate-300 hover:text-navy-600 hover:bg-navy-50 rounded-lg transition-colors">
+              <Pencil size={14} />
+            </button>
             <button onPointerDown={() => onDelete(property.id)}
               className="p-1.5 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors">
               <X size={14} />
@@ -333,6 +344,7 @@ export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showAdd, setShowAdd]       = useState(false);
+  const [editTarget, setEditTarget] = useState<Property | null>(null);
   const [sortKey, setSortKey]       = useState<SortKey>('newest');
   const MUST_COUNT = 7;
 
@@ -375,6 +387,16 @@ export default function PropertiesPage() {
           }}
         />
       )}
+      {editTarget && (
+        <AddPropertyModal
+          initialData={editTarget}
+          onClose={() => setEditTarget(null)}
+          onAdd={p => {
+            saveProperties(properties.map(x => x.id === p.id ? p : x));
+            setEditTarget(null);
+          }}
+        />
+      )}
 
       <div className="flex items-start justify-between">
         <div>
@@ -412,7 +434,8 @@ export default function PropertiesPage() {
             {sorted.map(p => (
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
                 onDelete={id => saveProperties(properties.filter(p => p.id !== id))}
-                onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))} />
+                onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))}
+                onEdit={setEditTarget} />
             ))}
           </div>
           <button onPointerDown={() => setShowAdd(true)}
