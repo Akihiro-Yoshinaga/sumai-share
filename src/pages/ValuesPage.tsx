@@ -29,6 +29,7 @@ export default function ValuesPage() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<Priority | 'ALL'>('ALL');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [newRow, setNewRow] = useState<Omit<Condition, 'id'>>({
     category: 'エリア', item: '', detail: '', priority: 'MUST', note: ''
   });
@@ -40,6 +41,7 @@ export default function ValuesPage() {
     try {
       const data = isConnected ? await apiGetConditions() : mockConditions;
       setConditions(data);
+      setLastSynced(new Date());
     } catch (e) {
       setError('データの読み込みに失敗しました。Mockデータを表示しています。');
       setConditions(mockConditions);
@@ -96,7 +98,10 @@ export default function ValuesPage() {
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">価値観のすり合わせ</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {isConnected ? 'スプレッドシートと同期中' : 'Mockデータ表示中（GAS URL未設定）'}
+            {!isConnected ? 'Mockデータ表示中（GAS URL未設定）'
+              : loading ? 'スプレッドシートと同期中...'
+              : lastSynced ? `最終同期: ${lastSynced.getHours()}:${String(lastSynced.getMinutes()).padStart(2, '0')}`
+              : 'スプレッドシートと連携済み'}
           </p>
         </div>
         <button onClick={load} disabled={loading}
@@ -307,11 +312,10 @@ function ImageGallery() {
       </div>
 
       {/* ドロップゾーン */}
-      <div
+      <label
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
-        onPointerDown={() => fileRef.current?.click()}
         className={`flex flex-col items-center justify-center gap-2 py-8 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
           dragOver ? 'border-navy-400 bg-navy-50' : 'border-slate-200 hover:border-navy-300 hover:bg-slate-50'
         }`}
@@ -321,7 +325,7 @@ function ImageGallery() {
         <p className="text-xs text-slate-300">家具・間取り・内装の写真など</p>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
           onChange={e => addFiles(e.target.files)} />
-      </div>
+      </label>
 
       {/* 画像グリッド */}
       {images.length > 0 && (
