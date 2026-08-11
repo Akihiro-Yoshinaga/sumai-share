@@ -214,23 +214,8 @@ var GMAIL_LABEL_DONE  = 'sumai-share-取込済み';
 // 検索対象の差出人（各ポータルの「保存した検索条件」新着お知らせメール）
 // ※ debugListingMails で実際の差出人を確認してから実態に合わせること
 var MAIL_FROM_QUERY   = '(from:suumo.jp OR from:athome.co.jp OR from:homes.co.jp)';
-// ポータル側の「保存した検索条件」で確実に絞り込まれているMUST条件の行ID。
-// ID はシート「物件リサーチ要件一覧」の行ID（getConditions が返す id）と一致させること。
-// 画面側は同じシートを参照して適合率を出すので、ここがズレると表示が嘘になる。
-//
-// シートのMUST（2026-08-11時点・全8件）と、アットホーム保存条件での担保状況：
-//   row_1  家賃総額 25万円以内（管理費込）… ✗ 30万円で運用すると決めたため保証されない
-//   row_3  大型スーパー近く              … ✗ 検索条件から除外（内見時の手動確認）
-//   row_4  2LDK以上                     … ✓ 保証される
-//   row_7  シンクとコンロの間のスペース   … ✗ 検索条件に該当項目なし
-//   row_8  バイク置き場                  … ✗ 該当171件と少なく通知が来なくなるため除外
-//   row_9  浴室乾燥機                    … ✓ 保証される
-//   row_10 宅配ボックス                  … ✓ 保証される
-//   row_17 2口以上ガスコンロ             … ✓ 保証される
-//
-// 満たしていない条件を「満たした」と記録しないため、保証されないものは貼らない。
-// 保存条件やシートの行を変更したら、この配列も必ず合わせて更新すること。
-var MUST_TAGS_COVERED = ['row_4', 'row_9', 'row_10', 'row_17'];
+// MUST適合率は 2026-08-11 に廃止した（取り込み方法で値が変わり比較に使えなかったため）。
+// 物件の優劣は画面側の星評価で判断する。mustTagIds はデータ互換のため空配列で残す。
 // 募集終了とみなすキーワード（誤検出を避けるため限定的に。ヒットすれば「終了」）
 var CLOSED_KEYWORDS   = [
   '掲載を終了', '掲載が終了', '掲載終了しました',
@@ -321,7 +306,7 @@ function ingestListingMails() {
           address: it.address || '',
           metAt: todayStr_(),
           source: 'auto', // 画面で手動追加分と分けて表示するための目印
-          mustTagIds: MUST_TAGS_COVERED.slice(),
+          mustTagIds: [],
           ratings: [
             { userId: 'akihiro', stars: 0, compromise: '' },
             { userId: 'akari',   stars: 0, compromise: '' }

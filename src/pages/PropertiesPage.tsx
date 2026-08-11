@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Pencil, Mail, Hand } from 'lucide-react';
-import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages, apiGetConditions } from '../api';
-import type { Condition, Property, PropertyRating, PropertySource } from '../types';
+import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages } from '../api';
+import type { Property, PropertyRating, PropertySource } from '../types';
 
 const PARTNERS = [
   { key: 'akihiro' as const, label: 'あきひろ' },
@@ -17,18 +17,6 @@ function StarInput({ value, onChange }: { value: number; onChange: (v: number) =
           onClick={() => onChange(i)} />
       ))}
     </span>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 80 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-400' : 'bg-rose-400';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${score}%` }} />
-      </div>
-      <span className="text-xs font-bold tabular-nums w-9 text-right">{score}%</span>
-    </div>
   );
 }
 
@@ -241,10 +229,9 @@ function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void
   );
 }
 
-function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingChange, onEdit, onToggleMust }: { property: Property; mustCount: number; mustConditions: Condition[]; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void; onToggleMust: (propertyId: string, conditionId: string) => void }) {
+function PropertyCard({ property, onDelete, onRatingChange, onEdit }: { property: Property; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void }) {
   const [expanded, setExpanded] = useState(false);
 
-  const score = mustCount === 0 ? 0 : Math.round((property.mustTagIds.length / mustCount) * 100);
 
   const avg = property.ratings.reduce((s, r) => s + r.stars, 0) / (property.ratings.filter(r => r.stars > 0).length || 1);
 
@@ -300,38 +287,6 @@ function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingC
           </span>
         </div>
 
-        {/* MUST適合率 */}
-        {mustCount > 0 && (
-          <div className="mt-3">
-            <div className="flex justify-between mb-1">
-              <span className="text-xs text-slate-500">MUST適合率</span>
-              <span className="text-xs text-slate-400">{property.mustTagIds.length}/{mustCount}</span>
-            </div>
-            <ScoreBar score={score} />
-            {mustConditions.length > 0 && (
-              <>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {mustConditions.map(c => {
-                    const ok = property.mustTagIds.includes(c.id);
-                    return (
-                      <button key={c.id} title={ok ? 'タップで未確認に戻す' : 'タップで確認済みにする'}
-                        onPointerDown={() => onToggleMust(property.id, c.id)}
-                        className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${
-                          ok
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-slate-50 text-slate-400 border-slate-200 line-through hover:border-slate-300'
-                        }`}>
-                        {c.detail || c.item}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="mt-1 text-[10px] text-slate-400">タップで確認済みを切り替え</p>
-              </>
-            )}
-          </div>
-        )}
-
         {/* 2人の平均評価 */}
         <div className="mt-3 flex items-center gap-2">
           <span className="text-xs text-slate-500">2人の平均</span>
@@ -371,10 +326,10 @@ function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingC
   );
 }
 
-type SortKey = 'must' | 'newest';
+type SortKey = 'rating' | 'newest';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'must',   label: '適合順' },
+  { key: 'rating', label: '評価順' },
   { key: 'newest', label: '新着順' },
 ];
 
@@ -389,6 +344,12 @@ const SOURCE_FILTERS: { key: SourceFilter; label: string }[] = [
 
 const isAutoProperty = (p: Property) => p.source === 'auto';
 
+// 2人の平均星。未評価(0)は分母から外す。
+const avgStars = (p: Property) => {
+  const rated = p.ratings.filter(r => r.stars > 0);
+  return rated.length ? rated.reduce((s, r) => s + r.stars, 0) / rated.length : 0;
+};
+
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -396,10 +357,6 @@ export default function PropertiesPage() {
   const [editTarget, setEditTarget] = useState<Property | null>(null);
   const [sortKey, setSortKey]       = useState<SortKey>('newest');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  // MUST条件はシート「物件リサーチ要件一覧」を唯一の参照元にする。
-  // 以前は件数を直値7で持っていたため、シートを編集しても適合率が追従しなかった。
-  const [mustConditions, setMustConditions] = useState<Condition[]>([]);
-  const MUST_COUNT = mustConditions.length;
 
   const LS_KEY = 'sumai_properties';
 
@@ -423,20 +380,8 @@ export default function PropertiesPage() {
       })
       .catch(() => setLoading(false));
 
-    apiGetConditions()
-      .then(rows => setMustConditions(rows.filter(c => c.priority === 'MUST')))
-      .catch(console.error);
   }, []);
 
-  // MUST条件の確認済み/未確認をカードから切り替える。
-  // メールから自動取り込みした分も、内見して確認できた条件をここで足していく。
-  const toggleMust = (propertyId: string, conditionId: string) => {
-    saveProperties(properties.map(p => {
-      if (p.id !== propertyId) return p;
-      const has = p.mustTagIds.includes(conditionId);
-      return { ...p, mustTagIds: has ? p.mustTagIds.filter(x => x !== conditionId) : [...p.mustTagIds, conditionId] };
-    }));
-  };
 
   const autoCount   = properties.filter(isAutoProperty).length;
   const manualCount = properties.length - autoCount;
@@ -446,7 +391,7 @@ export default function PropertiesPage() {
   );
 
   const sorted = [...visible].sort((a, b) => {
-    if (sortKey === 'must')   return b.mustTagIds.length - a.mustTagIds.length;
+    if (sortKey === 'rating') return avgStars(b) - avgStars(a);
     return b.id.localeCompare(a.id);
   });
 
@@ -526,11 +471,10 @@ export default function PropertiesPage() {
 
           <div className="space-y-4">
             {sorted.map(p => (
-              <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT} mustConditions={mustConditions}
+              <PropertyCard key={p.id} property={p}
                 onDelete={id => saveProperties(properties.filter(p => p.id !== id))}
                 onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))}
-                onEdit={setEditTarget}
-                onToggleMust={toggleMust} />
+                onEdit={setEditTarget} />
             ))}
           </div>
           <button onPointerDown={() => setShowAdd(true)}
