@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Pencil, Mail, Hand } from 'lucide-react';
-import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages } from '../api';
-import type { Property, PropertyRating, PropertySource } from '../types';
+import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages, apiGetConditions } from '../api';
+import type { Condition, Property, PropertyRating, PropertySource } from '../types';
 
 const PARTNERS = [
   { key: 'akihiro' as const, label: 'あきひろ' },
@@ -241,7 +241,7 @@ function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void
   );
 }
 
-function PropertyCard({ property, mustCount, onDelete, onRatingChange, onEdit }: { property: Property; mustCount: number; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void }) {
+function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingChange, onEdit }: { property: Property; mustCount: number; mustConditions: Condition[]; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const score = mustCount === 0 ? 0 : Math.round((property.mustTagIds.length / mustCount) * 100);
@@ -308,6 +308,23 @@ function PropertyCard({ property, mustCount, onDelete, onRatingChange, onEdit }:
               <span className="text-xs text-slate-400">{property.mustTagIds.length}/{mustCount}</span>
             </div>
             <ScoreBar score={score} />
+            {mustConditions.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {mustConditions.map(c => {
+                  const ok = property.mustTagIds.includes(c.id);
+                  return (
+                    <span key={c.id} title={ok ? '確認済み' : '未確認'}
+                      className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                        ok
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200 line-through'
+                      }`}>
+                      {c.detail || c.item}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -375,7 +392,10 @@ export default function PropertiesPage() {
   const [editTarget, setEditTarget] = useState<Property | null>(null);
   const [sortKey, setSortKey]       = useState<SortKey>('newest');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const MUST_COUNT = 7;
+  // MUST条件はシート「物件リサーチ要件一覧」を唯一の参照元にする。
+  // 以前は件数を直値7で持っていたため、シートを編集しても適合率が追従しなかった。
+  const [mustConditions, setMustConditions] = useState<Condition[]>([]);
+  const MUST_COUNT = mustConditions.length;
 
   const LS_KEY = 'sumai_properties';
 
@@ -398,6 +418,10 @@ export default function PropertiesPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    apiGetConditions()
+      .then(rows => setMustConditions(rows.filter(c => c.priority === 'MUST')))
+      .catch(console.error);
   }, []);
 
   const autoCount   = properties.filter(isAutoProperty).length;
@@ -488,7 +512,7 @@ export default function PropertiesPage() {
 
           <div className="space-y-4">
             {sorted.map(p => (
-              <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT}
+              <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT} mustConditions={mustConditions}
                 onDelete={id => saveProperties(properties.filter(p => p.id !== id))}
                 onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))}
                 onEdit={setEditTarget} />
