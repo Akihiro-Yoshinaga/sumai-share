@@ -379,6 +379,19 @@ function archiveProperties_(items) {
 }
 
 // ---- 時間トリガー設置（1回だけエディタから実行する） ----
+// ※ 末尾に _ が付く関数はGASのプライベート扱いで実行ドロップダウンに出ないため、
+//    エディタから選べる公開名のラッパーを用意している。実行するのはこちら。
+function setupSumaiTriggers() {
+  setupSumaiTriggers_();
+}
+// ---- 現在のトリガー設置状況を確認する（診断用） ----
+function checkSumaiTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  if (!triggers.length) { Logger.log('トリガーは1件も設置されていません'); return; }
+  for (var i = 0; i < triggers.length; i++) {
+    Logger.log('関数=' + triggers[i].getHandlerFunction() + ' ／ 種別=' + triggers[i].getEventType());
+  }
+}
 function setupSumaiTriggers_() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
