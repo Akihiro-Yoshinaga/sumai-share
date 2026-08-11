@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Check, Calendar, User, Loader } from 'lucide-react';
+import { Plus, X, Check, Calendar, User, Loader, Pencil, CalendarClock } from 'lucide-react';
 import { apiGetTasks, apiSaveTasks } from '../api';
 import type { Task } from '../types';
+import { buildTimelineTasks, isTimelineTask, MILESTONES } from '../timeline';
 
 const CATEGORIES = ['内見', '手続き', '引越し準備', '家具・家電', 'その他'];
+const MOVE_IN_KEY = 'sumai_move_in_date';
+const DEFAULT_MOVE_IN = '2026-11-01';
 const ASSIGNEES = [
   { key: 'both'    as const, label: '2人', color: 'bg-navy-900 text-white' },
   { key: 'akihiro' as const, label: 'あきひろ', color: 'bg-slate-700 text-white' },
@@ -19,12 +22,20 @@ export default function TasksPage() {
   const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'done'>>({
     title: '', dueDate: '', assignee: 'both', category: 'その他',
   });
+  // 編集中のタスクID。null なら新規追加モード。
+  const [editId, setEditId] = useState<string | null>(null);
+  // 入居希望日。逆算タイムラインの起点。変更したら再生成できる。
+  const [moveInDate, setMoveInDate] = useState(
+    () => localStorage.getItem(MOVE_IN_KEY) ?? DEFAULT_MOVE_IN
+  );
 
   useEffect(() => {
     apiGetTasks()
       .then(data => { setTasks(data ?? []); setLoading(false); })
       .catch(() => { setTasks([]); setLoading(false); });
   }, []);
+
+  useEffect(() => { localStorage.setItem(MOVE_IN_KEY, moveInDate); }, [moveInDate]);
 
   const saveTasks = (next: Task[]) => {
     setTasks(next);
@@ -37,12 +48,38 @@ export default function TasksPage() {
 
   const remove = (id: string) => saveTasks(tasks.filter(t => t.id !== id));
 
-  const add = () => {
-    if (!newTask.title.trim()) return;
-    saveTasks([...tasks, { ...newTask, id: `task${Date.now()}`, done: false }]);
+  const resetForm = () => {
     setNewTask({ title: '', dueDate: '', assignee: 'both', category: 'その他' });
+    setEditId(null);
     setShowAdd(false);
   };
+
+  // 新規追加と編集の両方を担う。editId があれば該当タスクを上書きする。
+  const submitForm = () => {
+    if (!newTask.title.trim()) return;
+    if (editId) {
+      saveTasks(tasks.map(t => t.id === editId ? { ...t, ...newTask } : t));
+    } else {
+      saveTasks([...tasks, { ...newTask, id: `task${Date.now()}`, done: false }]);
+    }
+    resetForm();
+  };
+
+  const startEdit = (t: Task) => {
+    setNewTask({ title: t.title, dueDate: t.dueDate, assignee: t.assignee, category: t.category });
+    setEditId(t.id);
+    setShowAdd(true);
+  };
+
+  // 逆算タイムラインを生成。既にあるものは上書きせず、足りない分だけ追加する。
+  const generateTimeline = () => {
+    const fresh = buildTimelineTasks(moveInDate, tasks);
+    if (!fresh.length) return;
+    saveTasks([...tasks, ...fresh]);
+  };
+
+  const timelineCount = tasks.filter(isTimelineTask).length;
+  const pendingTimeline = buildTimelineTasks(moveInDate, tasks).length;
 
   const filtered = filterAssignee === 'all' ? tasks : tasks.filter(t => t.assignee === filterAssignee);
   const todo = filtered.filter(t => !t.done);
@@ -72,6 +109,39 @@ export default function TasksPage() {
         </button>
       </div>
 
+      {/* 逆算タイムライン */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div className="flex items-center gap-1.5">
+          <CalendarClock size={15} className="text-navy-500" />
+          <h3 className="text-sm font-bold text-navy-900">引っ越しの逆算タイムライン</h3>
+        </div>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          入居希望日から、解約予告・審査書類・内見開始・契約・ライフラインまでの
+          {MILESTONES.length}件を期限つきで生成します。生成後は内容も期限も自由に変更できます。
+        </p>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">入居希望日</label>
+            <input type="date" value={moveInDate} onChange={e => setMoveInDate(e.target.value)}
+              className="text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" />
+          </div>
+          <button onPointerDown={generateTimeline} disabled={pendingTimeline === 0}
+            className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
+              pendingTimeline === 0
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-navy-900 text-white hover:bg-navy-800'
+            }`}>
+            {pendingTimeline === 0 ? '生成済み' : `${pendingTimeline}件を生成`}
+          </button>
+        </div>
+        {timelineCount > 0 && (
+          <p className="text-xs text-slate-400">
+            生成済み {timelineCount}/{MILESTONES.length}件。
+            日付を変えて再生成しても、既に作られたタスクは上書きされません（手で直した内容が消えないようにするため）。
+          </p>
+        )}
+      </div>
+
       {/* 進捗バー */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
         <div className="flex justify-between mb-2">
@@ -93,7 +163,7 @@ export default function TasksPage() {
       {/* 追加フォーム */}
       {showAdd && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
-          <h3 className="text-sm font-bold text-navy-900">タスクを追加</h3>
+          <h3 className="text-sm font-bold text-navy-900">{editId ? 'タスクを編集' : 'タスクを追加'}</h3>
           <input type="text" value={newTask.title} onChange={e => setNewTask(v => ({ ...v, title: e.target.value }))}
             autoFocus
             className="w-full text-sm px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-navy-400 focus:ring-2 focus:ring-navy-100"
@@ -126,11 +196,11 @@ export default function TasksPage() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onPointerDown={e => { e.preventDefault(); add(); }}
+            <button onPointerDown={e => { e.preventDefault(); submitForm(); }}
               className="flex-1 bg-navy-900 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-navy-800 transition-colors">
-              追加
+              {editId ? '保存' : '追加'}
             </button>
-            <button onPointerDown={() => setShowAdd(false)}
+            <button onPointerDown={resetForm}
               className="px-4 py-2.5 text-sm text-slate-500 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
               キャンセル
             </button>
@@ -181,10 +251,16 @@ export default function TasksPage() {
                   </span>
                 </div>
               </div>
-              <button onPointerDown={() => remove(task.id)}
-                className="p-1 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors shrink-0">
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onPointerDown={() => startEdit(task)}
+                  className="p-1 text-slate-300 hover:text-navy-600 hover:bg-navy-50 rounded-lg transition-colors">
+                  <Pencil size={14} />
+                </button>
+                <button onPointerDown={() => remove(task.id)}
+                  className="p-1 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
           );
         })}
