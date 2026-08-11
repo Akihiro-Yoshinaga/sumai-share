@@ -72,7 +72,9 @@ export default function TasksPage() {
   };
 
   // 逆算タイムラインを生成。既にあるものは上書きせず、足りない分だけ追加する。
+  // 読み込み完了前に生成すると、後から届いたサーバーのデータで生成結果が消えるため防ぐ。
   const generateTimeline = () => {
+    if (loading) return;
     const fresh = buildTimelineTasks(moveInDate, tasks);
     if (!fresh.length) return;
     saveTasks([...tasks, ...fresh]);
@@ -125,13 +127,13 @@ export default function TasksPage() {
             <input type="date" value={moveInDate} onChange={e => setMoveInDate(e.target.value)}
               className="text-sm px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-navy-400" />
           </div>
-          <button onPointerDown={generateTimeline} disabled={pendingTimeline === 0}
+          <button onPointerDown={generateTimeline} disabled={loading || pendingTimeline === 0}
             className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors ${
-              pendingTimeline === 0
+              loading || pendingTimeline === 0
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 : 'bg-navy-900 text-white hover:bg-navy-800'
             }`}>
-            {pendingTimeline === 0 ? '生成済み' : `${pendingTimeline}件を生成`}
+            {loading ? '読み込み中...' : pendingTimeline === 0 ? '生成済み' : `${pendingTimeline}件を生成`}
           </button>
         </div>
         {timelineCount > 0 && (
