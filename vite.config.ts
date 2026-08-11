@@ -9,8 +9,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         format: 'iife',
-        entryFileNames: 'index.js',
-        assetFileNames: 'index.[ext]',
+        // ハッシュを付けないとデプロイしてもブラウザが古いJSを使い続けるため必須。
+        // scripts/build-gas.mjs は dist 内の .js を拡張子で探すのでハッシュ付きでも動く。
+        entryFileNames: 'index-[hash].js',
+        assetFileNames: 'index-[hash].[ext]',
         inlineDynamicImports: true,
       },
     },
