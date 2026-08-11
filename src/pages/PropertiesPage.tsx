@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Pencil } from 'lucide-react';
+import { ExternalLink, Star, Plus, X, Loader, MapPin, Maximize2, LayoutGrid, ChevronDown, ChevronUp, Sparkles, ImagePlus, Pencil, Mail, Hand } from 'lucide-react';
 import { apiGetProperties, apiSaveProperties, apiAnalyzePropertyImages } from '../api';
-import type { Property, PropertyRating } from '../types';
+import type { Property, PropertyRating, PropertySource } from '../types';
 
 const PARTNERS = [
   { key: 'akihiro' as const, label: 'あきひろ' },
@@ -32,7 +32,21 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
-type FormData = Omit<Property, 'id' | 'ratings' | 'mustTagIds'>;
+// 取り込み元のバッジ。source 未設定の既存データは手動追加として扱う。
+function SourceBadge({ source }: { source?: PropertySource }) {
+  const isAuto = source === 'auto';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+      isAuto
+        ? 'bg-sky-50 text-sky-700 border border-sky-200'
+        : 'bg-slate-100 text-slate-600 border border-slate-200'
+    }`}>
+      {isAuto ? <><Mail size={10} /> 自動</> : <><Hand size={10} /> 手動</>}
+    </span>
+  );
+}
+
+type FormData = Omit<Property, 'id' | 'ratings' | 'mustTagIds' | 'source'>;
 
 function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void; onAdd: (p: Property) => void; initialData?: Property }) {
   const isEdit = !!initialData;
@@ -100,7 +114,7 @@ function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void
       onAdd({ ...form, id: `p${Date.now()}`, ratings: [
         { userId: 'akihiro', stars: 0, compromise: '' },
         { userId: 'akari',   stars: 0, compromise: '' },
-      ], mustTagIds: [] });
+      ], mustTagIds: [], source: 'manual' });
     }
   };
 
@@ -245,7 +259,10 @@ function PropertyCard({ property, mustCount, onDelete, onRatingChange, onEdit }:
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-navy-900 text-base leading-snug">{property.name}</h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <SourceBadge source={property.source} />
+              <h3 className="font-bold text-navy-900 text-base leading-snug">{property.name}</h3>
+            </div>
             {property.address && (
               <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400">
                 <MapPin size={11} />{property.address}
@@ -340,12 +357,24 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'newest', label: '新着順' },
 ];
 
+// 取り込み元での絞り込み。source 未設定の既存データは手動追加とみなす。
+type SourceFilter = 'all' | 'manual' | 'auto';
+
+const SOURCE_FILTERS: { key: SourceFilter; label: string }[] = [
+  { key: 'all',    label: 'すべて' },
+  { key: 'manual', label: '手動で追加' },
+  { key: 'auto',   label: '自動取り込み' },
+];
+
+const isAutoProperty = (p: Property) => p.source === 'auto';
+
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showAdd, setShowAdd]       = useState(false);
   const [editTarget, setEditTarget] = useState<Property | null>(null);
   const [sortKey, setSortKey]       = useState<SortKey>('newest');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const MUST_COUNT = 7;
 
   const LS_KEY = 'sumai_properties';
@@ -371,7 +400,14 @@ export default function PropertiesPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  const sorted = [...properties].sort((a, b) => {
+  const autoCount   = properties.filter(isAutoProperty).length;
+  const manualCount = properties.length - autoCount;
+
+  const visible = properties.filter(p =>
+    sourceFilter === 'all' ? true : sourceFilter === 'auto' ? isAutoProperty(p) : !isAutoProperty(p)
+  );
+
+  const sorted = [...visible].sort((a, b) => {
     if (sortKey === 'must')   return b.mustTagIds.length - a.mustTagIds.length;
     return b.id.localeCompare(a.id);
   });
@@ -415,6 +451,26 @@ export default function PropertiesPage() {
         </div>
       ) : (
         <>
+          {/* 取り込み元での絞り込み */}
+          <div className="flex gap-2 flex-wrap">
+            {SOURCE_FILTERS.map(({ key, label }) => {
+              const n = key === 'all' ? properties.length : key === 'auto' ? autoCount : manualCount;
+              return (
+                <button key={key} onPointerDown={() => setSourceFilter(key)}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    sourceFilter === key
+                      ? 'bg-navy-900 text-white border-navy-900'
+                      : 'bg-white text-slate-500 border-slate-200'
+                  }`}>
+                  {key === 'auto' && <Mail size={11} />}
+                  {key === 'manual' && <Hand size={11} />}
+                  {label}
+                  <span className={sourceFilter === key ? 'opacity-70' : 'text-slate-400'}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* 並び替えタブ */}
           <div className="flex gap-2">
             {SORT_OPTIONS.map(({ key, label }) => (
@@ -427,7 +483,7 @@ export default function PropertiesPage() {
                 {label}
               </button>
             ))}
-            <span className="ml-auto text-xs text-slate-400 self-center">{properties.length}件</span>
+            <span className="ml-auto text-xs text-slate-400 self-center">{sorted.length}件</span>
           </div>
 
           <div className="space-y-4">

@@ -317,6 +317,7 @@ function ingestListingMails() {
           url: it.url,
           address: it.address || '',
           metAt: todayStr_(),
+          source: 'auto', // 画面で手動追加分と分けて表示するための目印
           mustTagIds: MUST_TAGS_COVERED.slice(),
           ratings: [
             { userId: 'akihiro', stars: 0, compromise: '' },

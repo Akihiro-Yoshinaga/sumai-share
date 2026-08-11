@@ -23,6 +23,10 @@ export interface PropertyRating {
   compromise: string;
 }
 
+// 物件がどう登録されたか。'auto' は新着メールからの自動取り込み、'manual' は画面からの手動追加。
+// 未設定（既存データ）は手動追加として扱う。
+export type PropertySource = 'auto' | 'manual';
+
 export interface Property {
   id: string;
   name: string;
@@ -35,6 +39,7 @@ export interface Property {
   mustTagIds: string[];
   ratings: PropertyRating[];
   imageUrl?: string;
+  source?: PropertySource;
 }
 
 export type DayType = 'weekday' | 'weekend';
