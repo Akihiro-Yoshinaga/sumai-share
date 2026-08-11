@@ -241,7 +241,7 @@ function AddPropertyModal({ onClose, onAdd, initialData }: { onClose: () => void
   );
 }
 
-function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingChange, onEdit }: { property: Property; mustCount: number; mustConditions: Condition[]; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void }) {
+function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingChange, onEdit, onToggleMust }: { property: Property; mustCount: number; mustConditions: Condition[]; onDelete: (id: string) => void; onRatingChange: (id: string, ratings: PropertyRating[]) => void; onEdit: (p: Property) => void; onToggleMust: (propertyId: string, conditionId: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const score = mustCount === 0 ? 0 : Math.round((property.mustTagIds.length / mustCount) * 100);
@@ -309,21 +309,25 @@ function PropertyCard({ property, mustCount, mustConditions, onDelete, onRatingC
             </div>
             <ScoreBar score={score} />
             {mustConditions.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {mustConditions.map(c => {
-                  const ok = property.mustTagIds.includes(c.id);
-                  return (
-                    <span key={c.id} title={ok ? '確認済み' : '未確認'}
-                      className={`px-1.5 py-0.5 rounded text-[10px] border ${
-                        ok
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-slate-50 text-slate-400 border-slate-200 line-through'
-                      }`}>
-                      {c.detail || c.item}
-                    </span>
-                  );
-                })}
-              </div>
+              <>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {mustConditions.map(c => {
+                    const ok = property.mustTagIds.includes(c.id);
+                    return (
+                      <button key={c.id} title={ok ? 'タップで未確認に戻す' : 'タップで確認済みにする'}
+                        onPointerDown={() => onToggleMust(property.id, c.id)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${
+                          ok
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-50 text-slate-400 border-slate-200 line-through hover:border-slate-300'
+                        }`}>
+                        {c.detail || c.item}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">タップで確認済みを切り替え</p>
+              </>
             )}
           </div>
         )}
@@ -424,6 +428,16 @@ export default function PropertiesPage() {
       .catch(console.error);
   }, []);
 
+  // MUST条件の確認済み/未確認をカードから切り替える。
+  // メールから自動取り込みした分も、内見して確認できた条件をここで足していく。
+  const toggleMust = (propertyId: string, conditionId: string) => {
+    saveProperties(properties.map(p => {
+      if (p.id !== propertyId) return p;
+      const has = p.mustTagIds.includes(conditionId);
+      return { ...p, mustTagIds: has ? p.mustTagIds.filter(x => x !== conditionId) : [...p.mustTagIds, conditionId] };
+    }));
+  };
+
   const autoCount   = properties.filter(isAutoProperty).length;
   const manualCount = properties.length - autoCount;
 
@@ -515,7 +529,8 @@ export default function PropertiesPage() {
               <PropertyCard key={p.id} property={p} mustCount={MUST_COUNT} mustConditions={mustConditions}
                 onDelete={id => saveProperties(properties.filter(p => p.id !== id))}
                 onRatingChange={(id, ratings) => saveProperties(properties.map(p => p.id === id ? { ...p, ratings } : p))}
-                onEdit={setEditTarget} />
+                onEdit={setEditTarget}
+                onToggleMust={toggleMust} />
             ))}
           </div>
           <button onPointerDown={() => setShowAdd(true)}
