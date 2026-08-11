@@ -211,8 +211,16 @@ function saveConditions(rows) {
 
 var SHEET_ARCHIVE     = '物件_アーカイブ';
 var GMAIL_LABEL_DONE  = 'sumai-share-取込済み';
-// 検索対象の差出人（SUUMO・アットホームの新着お知らせメール）
-var MAIL_FROM_QUERY   = '(from:suumo.jp OR from:athome.co.jp)';
+// 検索対象の差出人（各ポータルの「保存した検索条件」新着お知らせメール）
+// ※ debugListingMails で実際の差出人を確認してから実態に合わせること
+var MAIL_FROM_QUERY   = '(from:suumo.jp OR from:athome.co.jp OR from:homes.co.jp)';
+// ポータル側の「保存した検索条件」で既に絞り込み済みのMUSTタグID（src/mockData.ts の tags と対応）
+//   t1 駅徒歩15分以内 / t2 2LDK以上 / t3 2口ガスコンロ以上 / t4 家賃25万円以内
+//   t5 バイク置き場 / t6 浴室乾燥機 / t7 宅配ボックス / t8 大型スーパー近く
+// メールに載る＝これらの条件を満たす、という前提で自動登録時に付与する。
+// t8「大型スーパー近く」はポータルの検索条件で指定できないため、あえて外して手動確認に残す。
+// 保存条件を変更したら、この配列も必ず合わせて更新すること。
+var MUST_TAGS_COVERED = ['t1', 't2', 't3', 't4', 't5', 't6', 't7'];
 // 募集終了とみなすキーワード（誤検出を避けるため限定的に。ヒットすれば「終了」）
 var CLOSED_KEYWORDS   = [
   '掲載を終了', '掲載が終了', '掲載終了しました',
@@ -302,7 +310,7 @@ function ingestListingMails() {
           url: it.url,
           address: it.address || '',
           metAt: todayStr_(),
-          mustTagIds: [],
+          mustTagIds: MUST_TAGS_COVERED.slice(),
           ratings: [
             { userId: 'akihiro', stars: 0, compromise: '' },
             { userId: 'akari',   stars: 0, compromise: '' }
@@ -377,9 +385,9 @@ function setupSumaiTriggers_() {
     var fn = triggers[i].getHandlerFunction();
     if (fn === 'ingestListingMails' || fn === 'sweepClosedListings') ScriptApp.deleteTrigger(triggers[i]);
   }
-  ScriptApp.newTrigger('ingestListingMails').timeBased().everyHours(8).create();       // 1日3回
-  ScriptApp.newTrigger('sweepClosedListings').timeBased().everyDays(1).atHour(4).create(); // 毎日4時
-  Logger.log('トリガー設置完了：取込=8時間ごと / スイープ=毎日4時');
+  ScriptApp.newTrigger('ingestListingMails').timeBased().everyDays(1).atHour(7).create();   // 毎日7時
+  ScriptApp.newTrigger('sweepClosedListings').timeBased().everyDays(1).atHour(4).create();  // 毎日4時
+  Logger.log('トリガー設置完了：取込=毎日7時 / スイープ=毎日4時');
 }
 
 // ---- テスト用（エディタから手動実行して権限承認＆精度確認） ----
@@ -393,4 +401,26 @@ function testSweepOne() {
   var p = props[0];
   Logger.log('URL: ' + p.url);
   Logger.log('判定: ' + judgeListing_(p.url) + '（closed=終了 / open=掲載中 / unknown=判定不能）');
+}
+
+// ---- 診断用：どんな差出人のメールが受信トレイにあるか調べる ----
+// これを実行して、SUUMO/アットホームからのメールの実際の差出人アドレスを確認する
+function debugListingMails() {
+  var queries = [
+    'from:suumo.jp newer_than:60d',
+    'from:athome.co.jp newer_than:60d',
+    'from:homes.co.jp newer_than:60d',
+    'suumo newer_than:60d',
+    'アットホーム newer_than:60d',
+    "(HOME'S OR ホームズ OR ライフル) newer_than:60d",
+    '(新着物件 OR 新着のお知らせ OR おすすめ物件 OR 保存した検索条件 OR 条件に合う物件) newer_than:60d'
+  ];
+  for (var q = 0; q < queries.length; q++) {
+    var th = GmailApp.search(queries[q], 0, 5);
+    Logger.log('■ [' + queries[q] + '] → ' + th.length + '件');
+    for (var i = 0; i < th.length; i++) {
+      var m = th[i].getMessages()[0];
+      Logger.log('    from=' + m.getFrom() + ' ／ 件名=' + m.getSubject() + ' ／ ' + m.getDate());
+    }
+  }
 }
