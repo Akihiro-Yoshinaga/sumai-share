@@ -420,7 +420,7 @@ export default function PropertiesPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-navy-900 tracking-tight">物件トラッカー</h1>
-          <p className="mt-1 text-sm text-slate-500">MUST適合率 × 2人の評価で比較</p>
+          <p className="mt-1 text-sm text-slate-500">2人の評価で比較</p>
         </div>
         <button onPointerDown={() => setShowAdd(true)}
           className="flex items-center gap-1.5 px-4 py-2 bg-navy-900 text-white text-sm font-semibold rounded-xl hover:bg-navy-800 transition-colors">
